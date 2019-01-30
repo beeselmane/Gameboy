@@ -1,0 +1,524 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 50;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		8B3E99C621F26BE600FA2526 /* GBAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99C521F26BE600FA2526 /* GBAppDelegate.m */; };
+		8B3E99C821F26BE700FA2526 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8B3E99C721F26BE700FA2526 /* Assets.xcassets */; };
+		8B3E99CB21F26BE800FA2526 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 8B3E99C921F26BE800FA2526 /* MainMenu.xib */; };
+		8B3E99DC21F5321800FA2526 /* GBGameboyInstance.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99DB21F5321800FA2526 /* GBGameboyInstance.m */; };
+		8B3E99E921F5342000FA2526 /* gameboy.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99E821F5342000FA2526 /* gameboy.c */; };
+		8B3E99EB21F5342500FA2526 /* gameboy.h in Headers */ = {isa = PBXBuildFile; fileRef = 8B3E99EA21F5342400FA2526 /* gameboy.h */; };
+		8B3E99ED21F5343500FA2526 /* main.s in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99EC21F5343500FA2526 /* main.s */; };
+		8B3E99F721F5667B00FA2526 /* libEmulator.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B3E99E121F533C100FA2526 /* libEmulator.dylib */; };
+		8B3E99FC21F5690600FA2526 /* bios.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FB21F5690600FA2526 /* bios.c */; };
+		8B3E99FE21F5701D00FA2526 /* mmio.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FD21F5701D00FA2526 /* mmio.c */; };
+		8B3E9A0021F5766400FA2526 /* mmu.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FF21F5766400FA2526 /* mmu.c */; };
+		8B3E9A0221F585D800FA2526 /* wram.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E9A0121F585D800FA2526 /* wram.c */; };
+		8B430D1A21FBD80000DE5302 /* cart.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B430D1921FBD80000DE5302 /* cart.c */; };
+		8B430D1C21FE787000DE5302 /* cpu.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B430D1B21FE787000DE5302 /* cpu.c */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		8B3E99F821F566C800FA2526 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8B3E99B921F26BE600FA2526 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8B3E99E021F533C100FA2526;
+			remoteInfo = Emulator;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		8B3E99C121F26BE600FA2526 /* Gameboy.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Gameboy.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8B3E99C421F26BE600FA2526 /* GBAppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBAppDelegate.h; sourceTree = "<group>"; };
+		8B3E99C521F26BE600FA2526 /* GBAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBAppDelegate.m; sourceTree = "<group>"; };
+		8B3E99C721F26BE700FA2526 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		8B3E99CA21F26BE800FA2526 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/MainMenu.xib; sourceTree = "<group>"; };
+		8B3E99CC21F26BE800FA2526 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		8B3E99CF21F26BE800FA2526 /* Gameboy.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Gameboy.entitlements; sourceTree = "<group>"; };
+		8B3E99DA21F5321800FA2526 /* GBGameboyInstance.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBGameboyInstance.h; sourceTree = "<group>"; };
+		8B3E99DB21F5321800FA2526 /* GBGameboyInstance.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBGameboyInstance.m; sourceTree = "<group>"; };
+		8B3E99E121F533C100FA2526 /* libEmulator.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = libEmulator.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+		8B3E99E821F5342000FA2526 /* gameboy.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = gameboy.c; sourceTree = "<group>"; };
+		8B3E99EA21F5342400FA2526 /* gameboy.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = gameboy.h; sourceTree = "<group>"; };
+		8B3E99EC21F5343500FA2526 /* main.s */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.asm; path = main.s; sourceTree = "<group>"; };
+		8B3E99EE21F5636C00FA2526 /* cpu.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = cpu.h; sourceTree = "<group>"; };
+		8B3E99EF21F5637500FA2526 /* mmu.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mmu.h; sourceTree = "<group>"; };
+		8B3E99F021F563CB00FA2526 /* base.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = base.h; sourceTree = "<group>"; };
+		8B3E99F121F5643B00FA2526 /* wram.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = wram.h; sourceTree = "<group>"; };
+		8B3E99F221F5644000FA2526 /* lcd.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lcd.h; sourceTree = "<group>"; };
+		8B3E99F321F5644600FA2526 /* apu.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = apu.h; sourceTree = "<group>"; };
+		8B3E99F421F5649800FA2526 /* mmio.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mmio.h; sourceTree = "<group>"; };
+		8B3E99F521F564CA00FA2526 /* cart.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = cart.h; sourceTree = "<group>"; };
+		8B3E99FA21F567CC00FA2526 /* bios.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bios.h; sourceTree = "<group>"; };
+		8B3E99FB21F5690600FA2526 /* bios.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = bios.c; sourceTree = "<group>"; };
+		8B3E99FD21F5701D00FA2526 /* mmio.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mmio.c; sourceTree = "<group>"; };
+		8B3E99FF21F5766400FA2526 /* mmu.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mmu.c; sourceTree = "<group>"; };
+		8B3E9A0121F585D800FA2526 /* wram.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = wram.c; sourceTree = "<group>"; };
+		8B430D1921FBD80000DE5302 /* cart.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = cart.c; sourceTree = "<group>"; };
+		8B430D1B21FE787000DE5302 /* cpu.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = cpu.c; sourceTree = "<group>"; };
+		8B430D1D21FE7DC100DE5302 /* 指令集.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "指令集.h"; sourceTree = "<group>"; };
+		8B430D21220161B700DE5302 /* clock.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = clock.h; sourceTree = "<group>"; };
+		8B430D22220161ED00DE5302 /* dma.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = dma.h; sourceTree = "<group>"; };
+		8B430D232201627000DE5302 /* gamepad.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gamepad.h; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		8B3E99BE21F26BE600FA2526 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8B3E99F721F5667B00FA2526 /* libEmulator.dylib in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8B3E99DF21F533C100FA2526 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		8B3E99B821F26BE600FA2526 = {
+			isa = PBXGroup;
+			children = (
+				8B3E99C321F26BE600FA2526 /* Gameboy */,
+				8B3E99E521F533FB00FA2526 /* libGameboy */,
+				8B3E99C221F26BE600FA2526 /* Products */,
+				8B3E99F621F5667B00FA2526 /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		8B3E99C221F26BE600FA2526 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				8B3E99C121F26BE600FA2526 /* Gameboy.app */,
+				8B3E99E121F533C100FA2526 /* libEmulator.dylib */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		8B3E99C321F26BE600FA2526 /* Gameboy */ = {
+			isa = PBXGroup;
+			children = (
+				8B3E99DA21F5321800FA2526 /* GBGameboyInstance.h */,
+				8B3E99DB21F5321800FA2526 /* GBGameboyInstance.m */,
+				8B3E99C421F26BE600FA2526 /* GBAppDelegate.h */,
+				8B3E99C521F26BE600FA2526 /* GBAppDelegate.m */,
+				8B3E99C721F26BE700FA2526 /* Assets.xcassets */,
+				8B3E99C921F26BE800FA2526 /* MainMenu.xib */,
+				8B3E99CC21F26BE800FA2526 /* Info.plist */,
+				8B3E99CF21F26BE800FA2526 /* Gameboy.entitlements */,
+				8B3E99EC21F5343500FA2526 /* main.s */,
+			);
+			path = Gameboy;
+			sourceTree = "<group>";
+		};
+		8B3E99E521F533FB00FA2526 /* libGameboy */ = {
+			isa = PBXGroup;
+			children = (
+				8B3E99E721F533FB00FA2526 /* headers */,
+				8B3E99E621F533FB00FA2526 /* source */,
+			);
+			path = libGameboy;
+			sourceTree = "<group>";
+		};
+		8B3E99E621F533FB00FA2526 /* source */ = {
+			isa = PBXGroup;
+			children = (
+				8B3E99E821F5342000FA2526 /* gameboy.c */,
+				8B3E99FB21F5690600FA2526 /* bios.c */,
+				8B3E99FD21F5701D00FA2526 /* mmio.c */,
+				8B3E99FF21F5766400FA2526 /* mmu.c */,
+				8B3E9A0121F585D800FA2526 /* wram.c */,
+				8B430D1921FBD80000DE5302 /* cart.c */,
+				8B430D1B21FE787000DE5302 /* cpu.c */,
+				8B430D1D21FE7DC100DE5302 /* 指令集.h */,
+			);
+			path = source;
+			sourceTree = "<group>";
+		};
+		8B3E99E721F533FB00FA2526 /* headers */ = {
+			isa = PBXGroup;
+			children = (
+				8B3E99EA21F5342400FA2526 /* gameboy.h */,
+				8B3E99F021F563CB00FA2526 /* base.h */,
+				8B3E99FA21F567CC00FA2526 /* bios.h */,
+				8B3E99EE21F5636C00FA2526 /* cpu.h */,
+				8B3E99EF21F5637500FA2526 /* mmu.h */,
+				8B3E99F421F5649800FA2526 /* mmio.h */,
+				8B3E99F121F5643B00FA2526 /* wram.h */,
+				8B3E99F221F5644000FA2526 /* lcd.h */,
+				8B3E99F321F5644600FA2526 /* apu.h */,
+				8B3E99F521F564CA00FA2526 /* cart.h */,
+				8B430D21220161B700DE5302 /* clock.h */,
+				8B430D22220161ED00DE5302 /* dma.h */,
+				8B430D232201627000DE5302 /* gamepad.h */,
+			);
+			path = headers;
+			sourceTree = "<group>";
+		};
+		8B3E99F621F5667B00FA2526 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		8B3E99DD21F533C100FA2526 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8B3E99EB21F5342500FA2526 /* gameboy.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		8B3E99C021F26BE600FA2526 /* Gameboy */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8B3E99D221F26BE800FA2526 /* Build configuration list for PBXNativeTarget "Gameboy" */;
+			buildPhases = (
+				8B3E99BD21F26BE600FA2526 /* Sources */,
+				8B3E99BE21F26BE600FA2526 /* Frameworks */,
+				8B3E99BF21F26BE600FA2526 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8B3E99F921F566C800FA2526 /* PBXTargetDependency */,
+			);
+			name = Gameboy;
+			productName = Gameboy;
+			productReference = 8B3E99C121F26BE600FA2526 /* Gameboy.app */;
+			productType = "com.apple.product-type.application";
+		};
+		8B3E99E021F533C100FA2526 /* Emulator */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8B3E99E221F533C100FA2526 /* Build configuration list for PBXNativeTarget "Emulator" */;
+			buildPhases = (
+				8B3E99DD21F533C100FA2526 /* Headers */,
+				8B3E99DE21F533C100FA2526 /* Sources */,
+				8B3E99DF21F533C100FA2526 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Emulator;
+			productName = libGameboy;
+			productReference = 8B3E99E121F533C100FA2526 /* libEmulator.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		8B3E99B921F26BE600FA2526 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1000;
+				ORGANIZATIONNAME = "Corona Industries LTD";
+				TargetAttributes = {
+					8B3E99C021F26BE600FA2526 = {
+						CreatedOnToolsVersion = 10.0;
+					};
+					8B3E99E021F533C100FA2526 = {
+						CreatedOnToolsVersion = 10.0;
+					};
+				};
+			};
+			buildConfigurationList = 8B3E99BC21F26BE600FA2526 /* Build configuration list for PBXProject "Gameboy" */;
+			compatibilityVersion = "Xcode 9.3";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 8B3E99B821F26BE600FA2526;
+			productRefGroup = 8B3E99C221F26BE600FA2526 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				8B3E99C021F26BE600FA2526 /* Gameboy */,
+				8B3E99E021F533C100FA2526 /* Emulator */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		8B3E99BF21F26BE600FA2526 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8B3E99C821F26BE700FA2526 /* Assets.xcassets in Resources */,
+				8B3E99CB21F26BE800FA2526 /* MainMenu.xib in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		8B3E99BD21F26BE600FA2526 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8B3E99FE21F5701D00FA2526 /* mmio.c in Sources */,
+				8B430D1A21FBD80000DE5302 /* cart.c in Sources */,
+				8B3E99FC21F5690600FA2526 /* bios.c in Sources */,
+				8B3E9A0221F585D800FA2526 /* wram.c in Sources */,
+				8B3E99ED21F5343500FA2526 /* main.s in Sources */,
+				8B3E9A0021F5766400FA2526 /* mmu.c in Sources */,
+				8B430D1C21FE787000DE5302 /* cpu.c in Sources */,
+				8B3E99DC21F5321800FA2526 /* GBGameboyInstance.m in Sources */,
+				8B3E99C621F26BE600FA2526 /* GBAppDelegate.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8B3E99DE21F533C100FA2526 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8B3E99E921F5342000FA2526 /* gameboy.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8B3E99F921F566C800FA2526 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8B3E99E021F533C100FA2526 /* Emulator */;
+			targetProxy = 8B3E99F821F566C800FA2526 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		8B3E99C921F26BE800FA2526 /* MainMenu.xib */ = {
+			isa = PBXVariantGroup;
+			children = (
+				8B3E99CA21F26BE800FA2526 /* Base */,
+			);
+			name = MainMenu.xib;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		8B3E99D021F26BE800FA2526 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.13;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		8B3E99D121F26BE800FA2526 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.13;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		8B3E99D321F26BE800FA2526 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Gameboy/Gameboy.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Gameboy/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.beeselmane.Gameboy;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		8B3E99D421F26BE800FA2526 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Gameboy/Gameboy.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = Gameboy/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.beeselmane.Gameboy;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+		8B3E99E321F533C100FA2526 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				EXECUTABLE_PREFIX = lib;
+				GCC_WARN_UNUSED_FUNCTION = NO;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/libGameboy/headers";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+			};
+			name = Debug;
+		};
+		8B3E99E421F533C100FA2526 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				EXECUTABLE_PREFIX = lib;
+				GCC_WARN_UNUSED_FUNCTION = NO;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/libGameboy/headers";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		8B3E99BC21F26BE600FA2526 /* Build configuration list for PBXProject "Gameboy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8B3E99D021F26BE800FA2526 /* Debug */,
+				8B3E99D121F26BE800FA2526 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8B3E99D221F26BE800FA2526 /* Build configuration list for PBXNativeTarget "Gameboy" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8B3E99D321F26BE800FA2526 /* Debug */,
+				8B3E99D421F26BE800FA2526 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8B3E99E221F533C100FA2526 /* Build configuration list for PBXNativeTarget "Emulator" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8B3E99E321F533C100FA2526 /* Debug */,
+				8B3E99E421F533C100FA2526 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 8B3E99B921F26BE600FA2526 /* Project object */;
+}
