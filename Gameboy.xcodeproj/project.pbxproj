@@ -21,6 +21,7 @@
 		8B3E9A0221F585D800FA2526 /* wram.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E9A0121F585D800FA2526 /* wram.c */; };
 		8B430D1A21FBD80000DE5302 /* cart.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B430D1921FBD80000DE5302 /* cart.c */; };
 		8B430D1C21FE787000DE5302 /* cpu.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B430D1B21FE787000DE5302 /* cpu.c */; };
+		8B430D262201F5FA00DE5302 /* disasm.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B430D252201F5FA00DE5302 /* disasm.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -66,6 +67,8 @@
 		8B430D21220161B700DE5302 /* clock.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = clock.h; sourceTree = "<group>"; };
 		8B430D22220161ED00DE5302 /* dma.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = dma.h; sourceTree = "<group>"; };
 		8B430D232201627000DE5302 /* gamepad.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gamepad.h; sourceTree = "<group>"; };
+		8B430D242201F54800DE5302 /* disasm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = disasm.h; sourceTree = "<group>"; };
+		8B430D252201F5FA00DE5302 /* disasm.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = disasm.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -142,6 +145,7 @@
 				8B430D1921FBD80000DE5302 /* cart.c */,
 				8B430D1B21FE787000DE5302 /* cpu.c */,
 				8B430D1D21FE7DC100DE5302 /* 指令集.h */,
+				8B430D252201F5FA00DE5302 /* disasm.c */,
 			);
 			path = source;
 			sourceTree = "<group>";
@@ -162,6 +166,7 @@
 				8B430D21220161B700DE5302 /* clock.h */,
 				8B430D22220161ED00DE5302 /* dma.h */,
 				8B430D232201627000DE5302 /* gamepad.h */,
+				8B430D242201F54800DE5302 /* disasm.h */,
 			);
 			path = headers;
 			sourceTree = "<group>";
@@ -277,6 +282,7 @@
 			files = (
 				8B3E99FE21F5701D00FA2526 /* mmio.c in Sources */,
 				8B430D1A21FBD80000DE5302 /* cart.c in Sources */,
+				8B430D262201F5FA00DE5302 /* disasm.c in Sources */,
 				8B3E99FC21F5690600FA2526 /* bios.c in Sources */,
 				8B3E9A0221F585D800FA2526 /* wram.c in Sources */,
 				8B3E99ED21F5343500FA2526 /* main.s in Sources */,
