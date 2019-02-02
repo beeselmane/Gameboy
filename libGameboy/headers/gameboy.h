@@ -30,10 +30,7 @@ struct __GBGameboy {
     bool cartInstalled;
 };
 
-#pragma mark - Initialization Routines
 
-bool GBIOMapperInit(GBIOMapper *space);
-bool GBMemoryManagerInit(GBMemoryManager *manager, GBCartridge *cartridge);
 
 #endif /* __gameboy__ */
 

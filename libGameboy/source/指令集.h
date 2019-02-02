@@ -34,39 +34,26 @@
 
 #pragma mark - Memory Access
 
-static __attribute__((always_inline)) void __GBProcessorRead16(GBProcessor *cpu)
-{
-    UInt16 data = GBMemoryManagerRead(cpu->mmu, cpu->state.mar);
-    data |= (GBMemoryManagerRead(cpu->mmu, cpu->state.mar + 1) << 8);
-
-    cpu->state.mdr = data;
-    cpu->state.accessed = true;
-}
-
-static __attribute__((always_inline)) void __GBProcessorWrite16(GBProcessor *cpu)
-{
-    GBMemoryManagerWrite(cpu->mmu, cpu->state.mar + 0, cpu->state.mdr & 0xFF);
-    GBMemoryManagerWrite(cpu->mmu, cpu->state.mar + 1, cpu->state.mdr >> 8);
-
-    cpu->state.accessed = true;
-}
-
-static __attribute__((always_inline)) void __GBProcessorRead8(GBProcessor *cpu)
-{
-    cpu->state.mdr = GBMemoryManagerRead(cpu->mmu, cpu->state.mar);
-    cpu->state.accessed = true;
-}
-
-static __attribute__((always_inline)) void __GBProcessorWrite8(GBProcessor *cpu)
-{
-    GBMemoryManagerWrite(cpu->mmu, cpu->state.mar, cpu->state.mdr);
-    cpu->state.accessed = true;
-}
-
-static __attribute__((always_inline)) void __GBProcessorSetupAccess(GBProcessor *cpu, UInt16 address)
+static __attribute__((always_inline)) void __GBProcessorRead(GBProcessor *cpu, UInt16 address)
 {
     cpu->state.accessed = false;
     cpu->state.mar = address;
+
+    GBMemoryManagerReadRequest(cpu->mmu, &cpu->state.mar, &cpu->state.mdr, &cpu->state.accessed);
+}
+
+static __attribute__((always_inline)) void __GBProcessorWrite(GBProcessor *cpu, UInt16 address, UInt8 data)
+{
+    cpu->state.accessed = false;
+    cpu->state.mar = address;
+    cpu->state.mdr = data;
+
+    GBMemoryManagerWriteRequest(cpu->mmu, &cpu->state.mar, &cpu->state.mdr, &cpu->state.accessed);
+}
+
+static __attribute__((always_inline)) void __GBProcessorReadArgument(GBProcessor *cpu)
+{
+    __GBProcessorRead(cpu, cpu->state.pc++);
 }
 
 static __attribute__((always_inline)) void __GBProcessorStall(GBProcessor *cpu, UInt8 memCycles)
@@ -80,22 +67,22 @@ static __attribute__((always_inline)) void __ALUAdd8(GBProcessor *cpu, UInt8 *to
 {
     // Perform two 4-bit adds (this is how the gameboy actually does this)
     UInt8 lo = ((*from) & 0xF) + ((*to) & 0xF) + carry;
-    cpu->state.f.bit.h = lo >> 4;
+    cpu->state.f.h = lo >> 4;
 
-    UInt8 hi = ((*from) >> 4) + ((*to) >> 4) + cpu->state.f.bit.h;
-    cpu->state.f.bit.c = hi >> 4;
+    UInt8 hi = ((*from) >> 4) + ((*to) >> 4) + cpu->state.f.h;
+    cpu->state.f.c = hi >> 4;
 
     (*to) = (hi << 4) | (lo & 0xF);
 
-    cpu->state.f.bit.z = !(*to);
-    cpu->state.f.bit.n = 0;
+    cpu->state.f.z = !(*to);
+    cpu->state.f.n = 0;
 }
 
 static __attribute__((always_inline)) void __ALUAdd16(GBProcessor *cpu, UInt16 *to, UInt16 *from, UInt8 carry)
 {
     // Perform two 8-bit adds (four 4-bit adds). Flags should automatically be right.
     __ALUAdd8(cpu, (UInt8 *)(to) + 0, (UInt8 *)(from) + 0, carry);
-    __ALUAdd8(cpu, (UInt8 *)(to) + 1, (UInt8 *)(from) + 1, cpu->state.f.bit.c);
+    __ALUAdd8(cpu, (UInt8 *)(to) + 1, (UInt8 *)(from) + 1, cpu->state.f.c);
 
     // 16 bit ALU operations stall for a single memory access
     __GBProcessorStall(cpu, 1);
@@ -106,21 +93,33 @@ static __attribute__((always_inline)) void __ALUSub8(GBProcessor *cpu, SInt8 *to
     // I forgot how 2's complemnet works so I did this instead
     SInt8 result = (*to) - (*from) + carry;
 
-    cpu->state.f.bit.z = !result;
-    cpu->state.f.bit.n = 1;
-    cpu->state.f.bit.h = (((*to) & 0x0F) < ((*from) & 0x0F));
-    cpu->state.f.bit.c = (result < 0);
+    cpu->state.f.z = !result;
+    cpu->state.f.n = 1;
+    cpu->state.f.h = (((*to) & 0x0F) < ((*from) & 0x0F));
+    cpu->state.f.c = (result < 0);
 
     (*to) = result;
 }
 
-static __attribute__((always_inline)) void __ALUSub16(GBProcessor *cpu, SInt16 *to, SInt16 *from, UInt8 carry)
+// TODO: Flags on logical operations
+static __attribute__((always_inline)) void __ALUAnd8(GBProcessor *cpu, UInt8 *to, UInt8 *from)
 {
-    __ALUSub8(cpu, (SInt8 *)(to) + 0, (SInt8 *)(from) + 0, carry);
-    __ALUSub8(cpu, (SInt8 *)(to) + 1, (SInt8 *)(from) + 1, cpu->state.f.bit.c);
+    *to = *to & *from;
+}
 
-    // 16 bit ALU operations stall for a single memory access
-    __GBProcessorStall(cpu, 1);
+static __attribute__((always_inline)) void __ALUXor8(GBProcessor *cpu, UInt8 *to, UInt8 *from)
+{
+    *to = *to ^ *from;
+}
+
+static __attribute__((always_inline)) void __ALUOr8(GBProcessor *cpu, UInt8 *to, UInt8 *from)
+{
+    *to = *to | *from;
+}
+
+static __attribute__((always_inline)) void __ALUCP8(GBProcessor *cpu, UInt8 *to, UInt8 *from)
+{
+    // TODO: Implement this
 }
 
 static __attribute__((always_inline)) void __ALURotateRight(UInt8 *reg, UInt8 amount)
@@ -139,894 +138,915 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
 
 #endif /* !defined(kGBDisassembler) */
 
+// Instruction data formats
+#ifndef kGBNumberFormatting
+    #define d16 "$0x%04X"
+    #define d8  "$0x%02X"
+    #define dIO "0xFF00"
+#endif /* !defined(kGBNumberFormatting) */
+
+#pragma mark - Argument Wrappers
+
+#define op_simple(code, str, impl)                                      \
+    op(code, 1, str, {                                                  \
+        impl;                                                           \
+                                                                        \
+        cpu->state.mode = kGBProcessorModeFetch;                        \
+    })
+
+#define op_wait(code, len, str, pre, post)                              \
+    op(code, len, str, {                                                \
+        if (cpu->state.mode == kGBProcessorModeRun) {                   \
+            pre;                                                        \
+                                                                        \
+            cpu->state.mode = kGBProcessorModeWait1;                    \
+        } else if (cpu->state.mode == kGBProcessorModeWait1) {          \
+            if (cpu->state.accessed)                                    \
+            {                                                           \
+                post;                                                   \
+                                                                        \
+                cpu->state.mode = kGBProcessorModeFetch;                \
+            }                                                           \
+        }                                                               \
+    })
+
+#define op_wait2(code, len, str, pre, mid, post)                        \
+    op(code, len, str, {                                                \
+        if (cpu->state.mode == kGBProcessorModeRun) {                   \
+            pre;                                                        \
+                                                                        \
+            cpu->state.mode = kGBProcessorModeWait1;                    \
+        } else if (cpu->state.mode == kGBProcessorModeWait1) {          \
+            if (cpu->state.accessed)                                    \
+            {                                                           \
+                mid;                                                    \
+                                                                        \
+                cpu->state.mode = kGBProcessorModeWait2;                \
+            }                                                           \
+        } else if (cpu->state.mode == kGBProcessorModeWait2) {          \
+            if (cpu->state.accessed)                                    \
+            {                                                           \
+                post;                                                   \
+                                                                        \
+                cpu->state.mode = kGBProcessorModeFetch;                \
+            }                                                           \
+        }                                                               \
+    })
+
+#define op_stall(code, len, str, impl)                                  \
+    op(code, len, str, {                                                \
+        if (cpu->state.mode == kGBProcessorModeRun) {                   \
+            impl;                                                       \
+                                                                        \
+            cpu->state.mode = kGBProcessorModeStalled;                  \
+        } else if (cpu->state.mode == kGBProcessorModeStalled) {        \
+            if (cpu->state.accessed)                                    \
+                cpu->state.mode = kGBProcessorModeFetch;                \
+        }                                                               \
+    })
+
+#define op_hl(code, str, impl)                                          \
+    op_wait(code, 1, str, {                                             \
+        __GBProcessorRead(cpu, cpu->state.hl);                          \
+    }, impl)
+
+#define op_arg(code, str, impl)                                         \
+    op_wait(code, 2, str, {                                             \
+        __GBProcessorReadArgument(cpu);                                 \
+    }, impl)
+
+#define op_arg16(code, str, intr, impl)                                 \
+    op(code, 3, str, {                                                  \
+        if (cpu->state.mode == kGBProcessorModeRun) {                   \
+            __GBProcessorReadArgument(cpu);                             \
+                                                                        \
+            cpu->state.mode = kGBProcessorModeWait1;                    \
+        } else if (cpu->state.mode == kGBProcessorModeWait1) {          \
+            if (cpu->state.accessed)                                    \
+            {                                                           \
+                intr;                                                   \
+                                                                        \
+                __GBProcessorReadArgument(cpu);                         \
+                                                                        \
+                cpu->state.mode = kGBProcessorModeWait2;                \
+            }                                                           \
+        } else if (cpu->state.mode == kGBProcessorModeWait2) {          \
+            if (cpu->state.accessed)                                    \
+            {                                                           \
+                impl;                                                   \
+                                                                        \
+                cpu->state.mode = kGBProcessorModeFetch;                \
+            }                                                           \
+        }                                                               \
+    })
+
+#pragma mark - Load Macros
+
+#define ld_r(code, dst, src)                                            \
+    op_simple(code, "ld " #dst ", " #src, {                             \
+        cpu->state.dst = cpu->state.src;                                \
+    })
+
+
+#define ld_rr(code, regs)                                               \
+    op_arg16(code, "ld " #regs ", " d16, {                              \
+        cpu->state.regs = cpu->state.mdr;                               \
+    }, {                                                                \
+        cpu->state.regs |= cpu->state.mdr << 8;                         \
+    })
+
+#define ld_a_rr(code, regs)                                             \
+op_wait(code, 1, "ld a, (" #regs ")", {                                 \
+    __GBProcessorRead(cpu, cpu->state.regs);                            \
+}, {                                                                    \
+    cpu->state.a = cpu->state.mdr;                                      \
+})
+
+#define ld_rr_a(code, regs)                                             \
+    op_wait(code, 1, "ld (" #regs "), a", {                             \
+        __GBProcessorWrite(cpu, cpu->state.regs, cpu->state.a);         \
+    }, {                                                                \
+        /* nothing */                                                   \
+    })
+
+
+
+#define ld_m(code, reg)                                                 \
+op(code, 2, "ld " #reg ", " d8, {                                   \
+if (cpu->state.mode == kGBProcessorModeRun) {                   \
+__GBProcessorReadArgument(cpu);                             \
+\
+cpu->state.mode = kGBProcessorModeWait1;                    \
+} else if (cpu->state.mode == kGBProcessorModeWait1) {          \
+if (cpu->state.accessed)                                    \
+{                                                           \
+cpu->state.reg = cpu->state.mdr;                        \
+cpu->state.mode = kGBProcessorModeFetch;                \
+}                                                           \
+}                                                               \
+})
+
+#define ld_hl(code, reg)                                                \
+op(code, 1, "ld (hl), " #reg, {                                     \
+if (cpu->state.mode == kGBProcessorModeRun) {                   \
+__GBProcessorWrite(cpu, cpu->state.hl, cpu->state.reg);     \
+\
+cpu->state.mode = kGBProcessorModeWait1;                    \
+} else if (cpu->state.mode == kGBProcessorModeWait1) {          \
+if (cpu->state.accessed)                                    \
+cpu->state.mode = kGBProcessorModeFetch;                \
+}                                                               \
+})
+
+#define ld_r_hl(code, reg)                                              \
+op(code, 1, "ld " #reg ", (hl)", {                                  \
+if (cpu->state.mode == kGBProcessorModeRun) {                   \
+__GBProcessorRead(cpu, cpu->state.hl);                      \
+\
+cpu->state.mode = kGBProcessorModeWait1;                    \
+} else if (cpu->state.mode == kGBProcessorModeWait1) {          \
+if (cpu->state.accessed)                                    \
+{                                                           \
+cpu->state.reg = cpu->state.mdr;                        \
+\
+cpu->state.mode = kGBProcessorModeFetch;                \
+}                                                           \
+}                                                               \
+})
+
+#pragma mark - Control flow instructions
+
+// TODO: Implement these
+#define jr(code, str, cond)                                             \
+    op(code, 2, "jr " str d8, {                                         \
+        /* */                                                           \
+    })                                                                  \
+
+#define jmp(code, str, cond)                                            \
+    op(code, 3, "jp " str d16, {                                        \
+        /* */                                                           \
+    })
+
+#define call(code, str, cond)                                           \
+    op(code, 3, "call " str d16, {                                      \
+        /* */                                                           \
+    })
+
+#define ret(code, str, cond)                                            \
+    op(code, 1, "ret " str, {                                           \
+        /* */                                                           \
+    })
+
+#define rst(code, dst)                                                  \
+    op(code, 1, "rst $" #dst, {                                         \
+        /* */                                                           \
+    })
+
+#pragma mark - Stack Manipulation Instructions
+
+#define pop(code, regs)                                                                 \
+    op(code, 1, "pop " #regs, {                                                         \
+        if (cpu->state.mode == kGBProcessorModeRun) {                                   \
+            __GBProcessorRead(cpu, cpu->state.sp++);                                    \
+                                                                                        \
+            cpu->state.mode = kGBProcessorModeWait1;                                    \
+        } else if (cpu->state.mode == kGBProcessorModeWait1) {                          \
+            if (cpu->state.accessed)                                                    \
+            {                                                                           \
+                cpu->state.regs = cpu->state.mdr;                                       \
+                                                                                        \
+                __GBProcessorRead(cpu, cpu->state.sp++);                                \
+                                                                                        \
+                cpu->state.mode = kGBProcessorModeWait2;                                \
+            }                                                                           \
+        } else if (cpu->state.mode == kGBProcessorModeWait2) {                          \
+            if (cpu->state.accessed)                                                    \
+            {                                                                           \
+                cpu->state.regs |= cpu->state.mdr << 8;                                 \
+                                                                                        \
+                __GBProcessorRead(cpu, 0x0000);                                         \
+                                                                                        \
+                cpu->state.mode = kGBProcessorModeStalled;                              \
+            }                                                                           \
+        } else if (cpu->state.mode == kGBProcessorModeStalled) {                        \
+            if (cpu->state.accessed)                                                    \
+                cpu->state.mode = kGBProcessorModeFetch;                                \
+        }                                                                               \
+    })
+
+#define push(code, regs)                                                                \
+    op(code, 1, "push " #regs, {                                                        \
+        if (cpu->state.mode == kGBProcessorModeRun) {                                   \
+            __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.regs >> 8);             \
+                                                                                        \
+        cpu->state.mode = kGBProcessorModeWait1;                                        \
+        } else if (cpu->state.mode == kGBProcessorModeWait1) {                          \
+            if (cpu->state.accessed)                                                    \
+            {                                                                           \
+                __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.regs & 0xFF);       \
+                                                                                        \
+                cpu->state.mode = kGBProcessorModeWait2;                                \
+            }                                                                           \
+        } else if (cpu->state.mode == kGBProcessorModeWait2) {                          \
+            if (cpu->state.accessed)                                                    \
+            {                                                                           \
+                __GBProcessorRead(cpu, 0x0000);                                         \
+                                                                                        \
+                cpu->state.mode = kGBProcessorModeStalled;                              \
+            }                                                                           \
+        } else if (cpu->state.mode == kGBProcessorModeStalled) {                        \
+            if (cpu->state.accessed)                                                    \
+                cpu->state.mode = kGBProcessorModeFetch;                                \
+        }                                                                               \
+    })
+
+#pragma mark - Undefined Instructions
+
+#define udef(code)                                                                      \
+    op(code, 1, "ud " #code, {                                                          \
+        fprintf(stderr, "Error: Undefined instruction 0x%02X called.\n", this->value);  \
+        fprintf(stderr, "Note: A real gameboy would lockup here.\n");                   \
+                                                                                        \
+        cpu->state.mode = kGBProcessorModeOff;                                          \
+    })
+
+#pragma mark - Logical Operations
+
+#define inc_r(code, reg)                                                \
+    op_simple(code, "inc " #reg, {                                      \
+        UInt8 carry = cpu->state.f.c;                                   \
+        UInt8 one = 1;                                                  \
+                                                                        \
+        __ALUAdd8(cpu, &cpu->state.reg, &one, 0);                       \
+        cpu->state.f.c = carry;                                         \
+    })
+
+#define dec_r(code, reg)                                                \
+    op_simple(code, "inc " #reg, {                                      \
+        UInt8 carry = cpu->state.f.c;                                   \
+        SInt8 one = 1;                                                  \
+                                                                        \
+        __ALUSub8(cpu, (SInt8 *)&cpu->state.reg, &one, 0);              \
+        cpu->state.f.c = carry;                                         \
+    })
+
+#define inc_rr(code, regs)                                              \
+    op(code, 1, "inc " #regs, {                                         \
+        if (cpu->state.mode == kGBProcessorModeRun) {                   \
+            cpu->state.regs++;                                          \
+                                                                        \
+            /* Read something. I don't care what */                     \
+            __GBProcessorRead(cpu, 0x0000);                             \
+                                                                        \
+            cpu->state.mode = kGBProcessorModeStalled;                  \
+        } else if (cpu->state.mode == kGBProcessorModeStalled) {        \
+            if (cpu->state.accessed)                                    \
+                cpu->state.mode = kGBProcessorModeFetch;                \
+        }                                                               \
+    })
+
+#define dec_rr(code, regs)                                              \
+    op(code, 1, "dec " #regs, {                                         \
+        if (cpu->state.mode == kGBProcessorModeRun) {                   \
+            cpu->state.regs--;                                          \
+                                                                        \
+            /* Read something. I don't care what */                     \
+            __GBProcessorRead(cpu, 0x0000);                             \
+                                                                        \
+            cpu->state.mode = kGBProcessorModeStalled;                  \
+        } else if (cpu->state.mode == kGBProcessorModeStalled) {        \
+            if (cpu->state.accessed)                                    \
+                cpu->state.mode = kGBProcessorModeFetch;                \
+        }                                                               \
+    })
+
+#define add_hl(code, reg)                                               \
+    op(code, 1, "add hl, " #reg, {                                      \
+        if (cpu->state.mode == kGBProcessorModeRun) {                   \
+            UInt8 zero = cpu->state.f.z;                                \
+                                                                        \
+            __ALUAdd16(cpu, &cpu->state.hl, &cpu->state.reg, 0);        \
+            __GBProcessorRead(cpu, 0x0000);                             \
+                                                                        \
+            cpu->state.f.z = zero;                                      \
+            cpu->state.mode = kGBProcessorModeStalled;                  \
+        } else if (cpu->state.mode == kGBProcessorModeStalled) {        \
+            if (cpu->state.accessed)                                    \
+                cpu->state.mode = kGBProcessorModeFetch;                \
+        }                                                               \
+    })
+
+#define math_op(code, name, reg, func, c)                               \
+    op_simple(code, name " a, " #reg, {                                 \
+        func(cpu, (void *)&cpu->state.a, (void *)&cpu->state.reg, c);   \
+    })                                                                  \
+
+#define add(code, reg) math_op(code, "add", reg, __ALUAdd8, 0)
+
+#define adc(code, reg) math_op(code, "adc", reg, __ALUAdd8, cpu->state.f.c)
+
+#define sub(code, reg) math_op(code, "sub", reg, __ALUSub8, 0)
+
+#define sbc(code, reg) math_op(code, "sbc", reg, __ALUSub8, cpu->state.f.c)
+
+#define alu_op(code, name, reg, func)                                   \
+    op_simple(code, name " " #reg, {                                    \
+        func(cpu, &cpu->state.a, &cpu->state.reg);                      \
+    })
+
+#define alu_op_hl(code, name, func)                                     \
+    op_hl(code, name " (hl)", {                                         \
+        func(cpu, &cpu->state.a, &cpu->state.mdr);                      \
+    })
+
+#define alu_op_arg(code, name, func)                                    \
+    op_arg(code, name " " d8, {                                         \
+        func(cpu, &cpu->state.a, &cpu->state.mdr);                      \
+    })
+
+#define and(code, reg) alu_op(code, "and", reg, __ALUAnd8)
+
+#define xor(code, reg) alu_op(code, "xor", reg, __ALUXor8)
+
+#define or(code, reg) alu_op(code, "or", reg, __ALUOr8)
+
+#define cp(code, reg) alu_op(code, "cp", reg, __ALUCP8)
+
 #pragma mark - Instruction Implementation
 
 op(0x00, 1, "nop", { /* nop doesn't do anything, sorry */ });
 
-op(0x01, 3, "ld bc, $0x%04X", {
-    __GBProcessorSetupAccess(cpu, cpu->state.pc);
-    __GBProcessorRead16(cpu);
+ld_rr(0x01, bc);
 
-    cpu->state.pc += 2;
-    cpu->state.bc.val = cpu->state.mdr;
-});
+ld_rr_a(0x02, bc);
 
-op(0x02, 1, "ld (bc), a", {
-    __GBProcessorSetupAccess(cpu, cpu->state.bc.val);
-    cpu->state.mdr = cpu->state.a;
+inc_rr(0x03, bc);
 
-    __GBProcessorWrite8(cpu);
-});
+inc_r(0x04, b);
+dec_r(0x05, b);
 
-op(0x03, 1, "inc bc", {
-    __GBProcessorStall(cpu, 1);
+ld_m(0x06, b);
 
-    cpu->state.bc.val++;
-});
-
-op(0x04, 1, "inc b", {
-    UInt8 carry = cpu->state.f.bit.c;
-    UInt8 one = 1;
-
-    __ALUAdd8(cpu, &cpu->state.bc.b, &one, 0);
-    cpu->state.f.bit.c = carry;
-});
-
-op(0x05, 1, "dec b", {
-    UInt8 carry = cpu->state.f.bit.c;
-    SInt8 one = 1;
-
-    __ALUSub8(cpu, (SInt8 *)&cpu->state.bc.b, &one, 0);
-    cpu->state.f.bit.c = carry;
-});
-
-op(0x06, 2, "ld b, $0x%02X", {
-    __GBProcessorSetupAccess(cpu, cpu->state.pc);
-    __GBProcessorRead8(cpu);
-
-    cpu->state.pc++;
-    cpu->state.bc.b = cpu->state.mdr;
-});
-
-op(0x07, 1, "rcla", {
+op_simple(0x07, "rcla", {
     __ALURotateLeft(&cpu->state.a, 1);
 
-    cpu->state.f.bit.z = 0;
-    cpu->state.f.bit.n = 0;
-    cpu->state.f.bit.h = 0;
-    cpu->state.f.bit.c = cpu->state.a & 1;
+    cpu->state.f.z = 0;
+    cpu->state.f.n = 0;
+    cpu->state.f.h = 0;
+    cpu->state.f.c = cpu->state.a & 1;
 });
 
-op(0x08, 3, "ld ($0x%04X), sp", {
-    //
+op(0x08, 3, "ld (" d16 "), sp", {
+    if (cpu->state.mode == kGBProcessorModeRun) {
+        __GBProcessorReadArgument(cpu);
+
+        cpu->state.mode = kGBProcessorModeWait1;
+    } else if (cpu->state.mode == kGBProcessorModeWait1) {
+        if (cpu->state.accessed)
+        {
+            cpu->state.data = cpu->state.mdr;
+
+            __GBProcessorReadArgument(cpu);
+
+            cpu->state.mode = kGBProcessorModeWait2;
+        }
+    } else if (cpu->state.mode == kGBProcessorModeWait2) {
+        if (cpu->state.accessed)
+        {
+            cpu->state.mar = cpu->state.data || (cpu->state.mdr << 8);
+
+            __GBProcessorWrite(cpu, cpu->state.mar, cpu->state.sp & 0xFF);
+
+            cpu->state.mode = kGBProcessorModeWait3;
+        }
+    } else if (cpu->state.mode == kGBProcessorModeWait3) {
+        if (cpu->state.accessed)
+        {
+            cpu->state.mar++;
+
+            __GBProcessorWrite(cpu, cpu->state.mar, cpu->state.sp >> 8);
+
+            cpu->state.mode = kGBProcessorModeWait4;
+        }
+    } else if (cpu->state.mode == kGBProcessorModeWait4) {
+        if (cpu->state.accessed)
+        {
+            cpu->state.sp |= ((UInt16)cpu->state.mdr) << 8;
+            cpu->state.mode = kGBProcessorModeFetch;
+        }
+    }
 });
 
-op(0x09, 1, "add hl, bc", {
-    //
-});
+add_hl(0x09, bc);
 
-op(0x0A, 1, "ld a, (bc)", {
-    //
-});
+ld_a_rr(0x0A, bc);
 
-op(0x0B, 1, "dec bc", {
-    //
-});
+dec_rr(0x0B, bc);
 
-op(0x0C, 1, "inc c", {
-    //
-});
+inc_r(0x0C, c);
+dec_r(0x0D, c);
 
-op(0x0D, 1, "dec c", {
-    //
-});
+ld_m(0x0E, c);
 
-op(0x0E, 2, "ld c, $0x%02X", {
-    //
-});
+op_simple(0x0F, "rrca", {
+    __ALURotateRight(&cpu->state.a, 1);
 
-op(0x0F, 1, "rrca", {
-    //
+    cpu->state.f.z = 0;
+    cpu->state.f.n = 0;
+    cpu->state.f.h = 0;
+    cpu->state.f.c = cpu->state.a & 1;
 });
 
 op(0x10, 2, "stop 0", {
-    //
+    cpu->state.mode = kGBProcessorModeStopped;
+
+    if (!__GBMemoryManagerRead(cpu->mmu, cpu->state.pc + 1))
+        cpu->state.pc++;
 });
 
-op(0x11, 3, "ld de, $0x%04X", {
-    //
+ld_rr(0x11, de);
+
+ld_rr_a(0x12, de);
+
+inc_rr(0x13, de);
+
+inc_r(0x14, d);
+dec_r(0x15, d);
+
+ld_m(0x16, d);
+
+op_simple(0x17, "rla", {
+    cpu->state.f.z = 0;
+    cpu->state.f.n = 0;
+    cpu->state.f.h = cpu->state.f.c;
+    cpu->state.f.c = cpu->state.a >> 7;
+
+    cpu->state.a <<= 1;
+    cpu->state.a |= cpu->state.f.h;
+    cpu->state.f.h = 0;
 });
 
-op(0x12, 1, "ld (de), a", {
-    //
+jr(0x18, "", true);
+
+add_hl(0x19, de);
+
+ld_a_rr(0x1A, de);
+
+dec_rr(0x1B, de);
+
+inc_r(0x1C, e);
+dec_r(0x1D, e);
+
+ld_m(0x1E, e);
+
+op_simple(0x1F, "rra", {
+    cpu->state.f.z = 0;
+    cpu->state.f.n = 0;
+    cpu->state.f.h = cpu->state.f.c;
+    cpu->state.f.c = cpu->state.a & 0;
+
+    cpu->state.a >>= 1;
+    cpu->state.a |= cpu->state.f.h << 7;
+    cpu->state.f.h = 0;
 });
 
-op(0x13, 1, "inc de", {
-    //
+jr(0x20, "nz, ", !cpu->state.f.z);
+
+ld_rr(0x21, hl);
+
+op_wait(0x22, 1, "ld (hl+), a", {
+    __GBProcessorWrite(cpu, cpu->state.hl++, cpu->state.a);
+}, {
+    // We don't need to do anything after
 });
 
-op(0x14, 1, "inc d", {
-    //
-});
+inc_rr(0x23, hl);
 
-op(0x15, 1, "dec d", {
-    //
-});
+inc_r(0x24, h);
+dec_r(0x25, h);
 
-op(0x16, 2, "ld d, $0x%02X", {
-    //
-});
-
-op(0x17, 1, "rla", {
-    //
-});
-
-op(0x18, 2, "jr $0x%02X", {
-    //
-});
-
-op(0x19, 1, "add hl, de", {
-    //
-});
-
-op(0x1A, 1, "ld a, (de)", {
-    //
-});
-
-op(0x1B, 1, "dec de", {
-    //
-});
-
-op(0x1C, 1, "inc e", {
-    //
-});
-
-op(0x1D, 1, "dec e", {
-    //
-});
-
-op(0x1E, 2, "ld e, $0x%02X", {
-    //
-});
-
-op(0x1F, 1, "rra", {
-    //
-});
-
-op(0x20, 2, "jr nz, $0x%02X", {
-    //
-});
-
-op(0x21, 3, "ld hl, $0x%04X", {
-    //
-});
-
-op(0x22, 1, "ld (hl+), a", {
-    //
-});
-
-op(0x23, 1, "inc hl", {
-    //
-});
-
-op(0x24, 1, "inc h", {
-    //
-});
-
-op(0x25, 1, "dec h", {
-    //
-});
-
-op(0x26, 2, "ld h, $0x%02X", {
-    //
-});
+ld_m(0x26, h);
 
 op(0x27, 1, "daa", {
     //
 });
 
-op(0x28, 2, "jr z, $0x%02X", {
-    //
+jr(0x28, "z, ", cpu->state.f.z);
+
+add_hl(0x29, hl);
+
+op_hl(0x2A, "ld a, (hl+)", {
+    cpu->state.a = cpu->state.mdr;
+    cpu->state.hl++;
 });
 
-op(0x29, 1, "add hl, hl", {
-    //
+dec_rr(0x2B, hl);
+
+inc_r(0x2C, l);
+dec_r(0x2D, l);
+
+ld_m(0x2E, l);
+
+op_simple(0x2F, "cpl", {
+    cpu->state.a = ~cpu->state.a;
+
+    cpu->state.f.h = 1;
+    cpu->state.f.n = 1;
 });
 
-op(0x2A, 1, "ld a, (hl+)", {
-    //
+jr(0x30, "nc, ", !cpu->state.f.c);
+
+ld_rr(0x31, sp);
+
+op_wait(0x32, 1, "ld (hl-), a", {
+    __GBProcessorWrite(cpu, cpu->state.hl--, cpu->state.a);
+}, {
+    // We don't need to do anything after
 });
 
-op(0x2B, 1, "dec hl", {
-    //
+inc_rr(0x33, sp);
+
+op_wait2(0x34, 1, "inc (hl)", {
+    __GBProcessorRead(cpu, cpu->state.hl);
+}, {
+    UInt8 carry = cpu->state.f.c;
+    UInt8 one = 1;
+
+    __ALUAdd8(cpu, &cpu->state.mdr, &one, 0);
+    cpu->state.f.c = carry;
+
+    __GBProcessorWrite(cpu, cpu->state.hl, cpu->state.mdr);
+}, {
+    // We're done now
 });
 
-op(0x2C, 1, "inc l", {
-    //
+op_wait2(0x35, 1, "dec (hl)", {
+    __GBProcessorRead(cpu, cpu->state.hl);
+}, {
+    UInt8 carry = cpu->state.f.c;
+    SInt8 one = 1;
+
+    __ALUSub8(cpu, (SInt8 *)&cpu->state.mdr, &one, 0);
+    cpu->state.f.c = carry;
+
+    __GBProcessorWrite(cpu, cpu->state.hl, cpu->state.mdr);
+}, {
+    // We're done now
 });
 
-op(0x2D, 1, "dec l", {
-    //
+op_wait2(0x36, 2, "ld (hl), " d8, {
+    __GBProcessorReadArgument(cpu);
+}, {
+    __GBProcessorWrite(cpu, cpu->state.hl, cpu->state.mdr);
+}, {
+    // We're done now
 });
 
-op(0x2E, 2, "ld l, $0x%02X", {
-    //
+op_simple(0x37, "scf", {
+    cpu->state.f.c = 1;
+
+    cpu->state.f.h = 0;
+    cpu->state.f.n = 0;
 });
 
-op(0x2F, 1, "cpl", {
-    //
+jr(0x38, "c, ", cpu->state.f.c);
+
+add_hl(0x39, sp);
+
+op_hl(0x3A, "ld a, (hl-)", {
+    cpu->state.a = cpu->state.mdr;
+    cpu->state.hl--;
 });
 
-op(0x30, 2, "jr nc, $0x%02X", {
-    //
+dec_rr(0x3B, sp);
+
+inc_r(0x3C, a);
+dec_r(0x3D, a);
+
+ld_m(0x3E, a);
+
+op_simple(0x3F, "ccf", {
+    cpu->state.f.c = ~cpu->state.f.c;
+
+    cpu->state.f.h = 0;
+    cpu->state.f.n = 0;
 });
 
-op(0x31, 3, "ld sp, $0x%04X", {
-    //
-});
+ld_r(0x40, b, b);
+ld_r(0x41, b, c);
+ld_r(0x42, b, d);
+ld_r(0x43, b, e);
+ld_r(0x44, b, h);
+ld_r(0x45, b, l);
+ld_r_hl(0x46, b);
+ld_r(0x47, b, a);
 
-op(0x32, 1, "ld (hl-), a", {
-    //
-});
+ld_r(0x48, c, b);
+ld_r(0x49, c, c);
+ld_r(0x4A, c, d);
+ld_r(0x4B, c, e);
+ld_r(0x4C, c, h);
+ld_r(0x4D, c, l);
+ld_r_hl(0x4E, c);
+ld_r(0x4F, c, a);
 
-op(0x33, 1, "inc sp", {
-    //
-});
+ld_r(0x50, d, b);
+ld_r(0x51, d, c);
+ld_r(0x52, d, d);
+ld_r(0x53, d, e);
+ld_r(0x54, d, h);
+ld_r(0x55, d, l);
+ld_r_hl(0x56, d);
+ld_r(0x57, d, a);
 
-op(0x34, 1, "inc (hl)", {
-    //
-});
+ld_r(0x58, e, b);
+ld_r(0x59, e, c);
+ld_r(0x5A, e, d);
+ld_r(0x5B, e, e);
+ld_r(0x5C, e, h);
+ld_r(0x5D, e, l);
+ld_r_hl(0x5E, e);
+ld_r(0x5F, e, a);
 
-op(0x35, 1, "dec (hl)", {
-    //
-});
+ld_r(0x60, h, b);
+ld_r(0x61, h, c);
+ld_r(0x62, h, d);
+ld_r(0x63, h, e);
+ld_r(0x64, h, h);
+ld_r(0x65, h, l);
+ld_r_hl(0x66, h);
+ld_r(0x67, h, a);
 
-op(0x36, 2, "ld (hl), $0x%02X", {
-    //
-});
+ld_r(0x68, l, b);
+ld_r(0x69, l, c);
+ld_r(0x6A, l, d);
+ld_r(0x6B, l, e);
+ld_r(0x6C, l, h);
+ld_r(0x6D, l, l);
+ld_r_hl(0x6E, l);
+ld_r(0x6F, l, a);
 
-op(0x37, 1, "scf", {
-    //
-});
-
-op(0x38, 2, "jr c, $0x%02X", {
-    //
-});
-
-op(0x39, 1, "add hl, sp", {
-    //
-});
-
-op(0x3A, 1, "ld a, (hl-)", {
-    //
-});
-
-op(0x3B, 1, "dec sp", {
-    //
-});
-
-op(0x3C, 1, "inc a", {
-    //
-});
-
-op(0x3D, 1, "dec a", {
-    //
-});
-
-op(0x3E, 2, "ld a, $0x%02X", {
-    //
-});
-
-op(0x3F, 1, "ccf", {
-    //
-});
-
-#define ld_r(code, dst, dbase, src, sbase)              \
-    op(code, 1, "ld " #dst ", " #src, {                 \
-        cpu->state.dbase.dst = cpu->state.sbase.src;    \
-    })
-
-#define ld_r_a(code, dst, dbase)                        \
-    op(code, 1, "ld " #dst ", a", {                     \
-        cpu->state.dbase.dst = cpu->state.a;            \
-    })
-
-#define ld_a_r(code, src, sbase)                        \
-    op(code, 1, "ld a, " #src, {                        \
-        cpu->state.a = cpu->state.sbase.src;            \
-    })
-
-ld_r(0x40, b, bc, b, bc);
-ld_r(0x41, b, bc, c, bc);
-ld_r(0x42, b, bc, d, de);
-ld_r(0x43, b, bc, e, de);
-ld_r(0x44, b, bc, h, hl);
-ld_r(0x45, b, bc, l, hl);
-
-op(0x46, 1, "ld b, (hl)", {
-    //
-});
-
-ld_a_r(0x47, b, bc);
-
-ld_r(0x48, c, bc, b, bc);
-ld_r(0x49, c, bc, c, bc);
-ld_r(0x4A, c, bc, d, de);
-ld_r(0x4B, c, bc, e, de);
-ld_r(0x4C, c, bc, h, hl);
-ld_r(0x4D, c, bc, l, hl);
-
-op(0x4E, 1, "ld c, (hl)", {
-    //
-});
-
-ld_a_r(0x4F, c, bc);
-
-ld_r(0x50, d, de, b, bc);
-ld_r(0x51, d, de, c, bc);
-ld_r(0x52, d, de, d, de);
-ld_r(0x53, d, de, e, de);
-ld_r(0x54, d, de, h, hl);
-ld_r(0x55, d, de, l, hl);
-
-op(0x56, 1, "ld d, (hl)", {
-    //
-});
-
-ld_a_r(0x57, d, de);
-
-ld_r(0x58, e, de, b, bc);
-ld_r(0x59, e, de, c, bc);
-ld_r(0x5A, e, de, d, de);
-ld_r(0x5B, e, de, e, de);
-ld_r(0x5C, e, de, h, hl);
-ld_r(0x5D, e, de, l, hl);
-
-op(0x5E, 1, "ld e, (hl)", {
-    //
-});
-
-ld_a_r(0x5F, e, de);
-
-ld_r(0x60, h, hl, b, bc);
-ld_r(0x61, h, hl, c, bc);
-ld_r(0x62, h, hl, d, de);
-ld_r(0x63, h, hl, e, de);
-ld_r(0x64, h, hl, h, hl);
-ld_r(0x65, h, hl, l, hl);
-
-op(0x66, 1, "ld h, (hl)", {
-    //
-});
-
-ld_a_r(0x67, h, hl);
-
-ld_r(0x68, l, hl, b, bc);
-ld_r(0x69, l, hl, c, bc);
-ld_r(0x6A, l, hl, d, de);
-ld_r(0x6B, l, hl, e, de);
-ld_r(0x6C, l, hl, h, hl);
-ld_r(0x6D, l, hl, l, hl);
-
-op(0x6E, 1, "ld l, (hl)", {
-    //
-});
-
-ld_a_r(0x6F, l, hl);
-
-op(0x70, 1, "ld (hl), b", {
-    //
-});
-
-op(0x71, 1, "ld (hl), c", {
-    //
-});
-
-op(0x72, 1, "ld (hl), d", {
-    //
-});
-
-op(0x73, 1, "ld (hl), e", {
-    //
-});
-
-op(0x74, 1, "ld (hl), h", {
-    //
-});
-
-op(0x75, 1, "ld (hl), l", {
-    //
-});
+ld_hl(0x70, b);
+ld_hl(0x71, c);
+ld_hl(0x72, d);
+ld_hl(0x73, e);
+ld_hl(0x74, h);
+ld_hl(0x75, l);
 
 op(0x76, 1, "halt", {
-    //
+    cpu->state.mode = kGBProcessorModeHalted;
 });
 
-op(0x77, 1, "ld (hl), a", {
-    //
-});
-
-op(0x78, 1, "ld a, b", {
-    //
-});
-
-op(0x79, 1, "ld a, c", {
-    //
-});
-
-op(0x7A, 1, "ld a, d", {
-    //
-});
-
-op(0x7B, 1, "ld a, e", {
-    //
-});
-
-op(0x7C, 1, "ld a, h", {
-    //
-});
-
-op(0x7D, 1, "ld a, l", {
-    //
-});
-
-op(0x7E, 1, "ld a, (hl)", {
-    //
-});
-
-op(0x7F, 1, "ld a, a", {
-    //
-});
-
-op(0x80, 1, "add a, b", {
-    //
-});
-
-op(0x81, 1, "add a, c", {
-    //
-});
-
-op(0x82, 1, "add a, d", {
-    //
-});
-
-op(0x83, 1, "add a, e", {
-    //
-});
-
-op(0x84, 1, "add a, h", {
-    //
-});
-
-op(0x85, 1, "add a, l", {
-    //
-});
-
-op(0x86, 1, "add a, (hl)", {
-    //
-});
-
-op(0x87, 1, "add a, a", {
-    //
-});
-
-op(0x88, 1, "adc a, b", {
-    //
-});
-
-op(0x89, 1, "adc a, c", {
-    //
-});
-
-op(0x8A, 1, "adc a, d", {
-    //
-});
-
-op(0x8B, 1, "adc a, e", {
-    //
-});
-
-op(0x8C, 1, "adc a, h", {
-    //
-});
-
-op(0x8D, 1, "adc a, l", {
-    //
-});
-
-op(0x8E, 1, "adc a, (hl)", {
-    //
-});
-
-op(0x8F, 1, "adc a, a", {
-    //
-});
-
-op(0x90, 1, "sub b", {
-    //
-});
-
-op(0x91, 1, "sub c", {
-    //
-});
-
-op(0x92, 1, "sub d", {
-    //
-});
-
-op(0x93, 1, "sub e", {
-    //
-});
-
-op(0x94, 1, "sub h", {
-    //
-});
-
-op(0x95, 1, "sub l", {
-    //
-});
-
-op(0x96, 1, "sub (hl)", {
-    //
-});
-
-op(0x97, 1, "sub a", {
-    //
-});
-
-op(0x98, 1, "sbc a, b", {
-    //
-});
-
-op(0x99, 1, "sbc a, c", {
-    //
-});
-
-op(0x9A, 1, "sbc a, d", {
-    //
-});
-
-op(0x9B, 1, "sbc a, e", {
-    //
-});
-
-op(0x9C, 1, "sbc a, h", {
-    //
-});
-
-op(0x9D, 1, "sbc a, l", {
-    //
-});
-
-op(0x9E, 1, "sbc a, (hl)", {
-    //
-});
-
-op(0x9F, 1, "sbc a, a", {
-    //
-});
-
-op(0xA0, 1, "and b", {
-    //
-});
-
-op(0xA1, 1, "and c", {
-    //
-});
-
-op(0xA2, 1, "and d", {
-    //
-});
-
-op(0xA3, 1, "and e", {
-    //
-});
-
-op(0xA4, 1, "and h", {
-    //
-});
-
-op(0xA5, 1, "and l", {
-    //
-});
-
-op(0xA6, 1, "and (hl)", {
-    //
-});
-
-op(0xA7, 1, "and a", {
-    //
-});
-
-op(0xA8, 1, "xor b", {
-    //
-});
-
-op(0xA9, 1, "xor c", {
-    //
-});
-
-op(0xAA, 1, "xor d", {
-    //
-});
+ld_hl(0x77, a);
 
-op(0xAB, 1, "xor e", {
-    //
-});
+ld_r(0x78, a, b);
+ld_r(0x79, a, c);
+ld_r(0x7A, a, d);
+ld_r(0x7B, a, e);
+ld_r(0x7C, a, h);
+ld_r(0x7D, a, l);
+ld_r_hl(0x7E, a);
+ld_r(0x7F, a, a);
 
-op(0xAC, 1, "xor h", {
-    //
-});
+add(0x80, b);
+add(0x81, c);
+add(0x82, d);
+add(0x83, e);
+add(0x84, h);
+add(0x85, l);
 
-op(0xAD, 1, "xor l", {
-    //
+op_hl(0x86, "add a, (hl)", {
+    __ALUAdd8(cpu, &cpu->state.a, &cpu->state.mdr, 0);
 });
 
-op(0xAE, 1, "xor (hl)", {
-    //
-});
+add(0x87, a);
 
-op(0xAF, 1, "xor a", {
-    //
-});
+adc(0x88, b);
+adc(0x89, c);
+adc(0x8A, d);
+adc(0x8B, e);
+adc(0x8C, h);
+adc(0x8D, l);
 
-op(0xB0, 1, "or b", {
-    //
+op_hl(0x8E, "adc a, (hl)", {
+    __ALUAdd8(cpu, &cpu->state.a, &cpu->state.mdr, cpu->state.f.c);
 });
 
-op(0xB1, 1, "or c", {
-    //
-});
+adc(0x8F, a);
 
-op(0xB2, 1, "or d", {
-    //
-});
+sub(0x90, b);
+sub(0x91, c);
+sub(0x92, d);
+sub(0x93, e);
+sub(0x94, h);
+sub(0x95, l);
 
-op(0xB3, 1, "or e", {
-    //
+op_hl(0x96, "sub a, (hl)", {
+    __ALUSub8(cpu, (SInt8 *)&cpu->state.a, (SInt8 *)&cpu->state.mdr, 0);
 });
 
-op(0xB4, 1, "or h", {
-    //
-});
+sub(0x97, a);
 
-op(0xB5, 1, "or l", {
-    //
-});
+sbc(0x98, b);
+sbc(0x99, c);
+sbc(0x9A, d);
+sbc(0x9B, e);
+sbc(0x9C, h);
+sbc(0x9D, l);
 
-op(0xB6, 1, "or (hl)", {
-    //
+op_hl(0x9E, "sbc a, (hl)", {
+    __ALUSub8(cpu, (SInt8 *)&cpu->state.a, (SInt8 *)&cpu->state.mdr, cpu->state.f.c);
 });
 
-op(0xB7, 1, "or a", {
-    //
-});
+sbc(0x9F, a);
 
-op(0xB8, 1, "cp b", {
-    //
-});
+and(0xA0, b);
+and(0xA1, c);
+and(0xA2, d);
+and(0xA3, e);
+and(0xA4, h);
+and(0xA5, l);
 
-op(0xB9, 1, "cp c", {
-    //
-});
+alu_op_hl(0xA6, "and", __ALUAnd8);
 
-op(0xBA, 1, "cp d", {
-    //
-});
+and(0xA7, a);
 
-op(0xBB, 1, "cp e", {
-    //
-});
+xor(0xA8, b);
+xor(0xA9, c);
+xor(0xAA, d);
+xor(0xAB, e);
+xor(0xAC, h);
+xor(0xAD, l);
 
-op(0xBC, 1, "cp h", {
-    //
-});
+alu_op_hl(0xAE, "xor", __ALUXor8);
 
-op(0xBD, 1, "cp l", {
-    //
-});
+xor(0xAF, a);
 
-op(0xBE, 1, "cp (hl)", {
-    //
-});
+or(0xB0, b);
+or(0xB1, c);
+or(0xB2, d);
+or(0xB3, e);
+or(0xB4, h);
+or(0xB5, l);
 
-op(0xBF, 1, "cp a", {
-    //
-});
+alu_op_hl(0xB6, "or", __ALUOr8);
 
-op(0xC0, 1, "ret nz", {
-    //
-});
+or(0xB7, a);
 
-op(0xC1, 1, "pop bc", {
-    //
-});
+cp(0xB8, b);
+cp(0xB9, c);
+cp(0xBA, d);
+cp(0xBB, e);
+cp(0xBC, h);
+cp(0xBD, l);
 
-op(0xC2, 3, "jp nz, $0x%04X", {
-    //
-});
+alu_op_hl(0xBE, "cp", __ALUCP8);
 
-op(0xC3, 3, "jp $0x%04X", {
-    //
-});
+cp(0xBF, a);
 
-op(0xC4, 3, "call nz, $0x%04X", {
-    //
-});
+ret(0xC0, "nz", !cpu->state.f.z);
 
-op(0xC5, 1, "push bc", {
-    //
-});
+pop(0xC1, bc);
+jmp(0xC2, "nz, ", !cpu->state.f.z);
+jmp(0xC3, "", true);
+call(0xC4, "nz, ", !cpu->state.f.z);
 
-op(0xC6, 2, "add a, $0x%02X", {
-    //
-});
+push(0xC5, bc);
 
-op(0xC7, 1, "rst 00h", {
-    //
+op_arg(0xC6, "add a, " d8, {
+    __ALUAdd8(cpu, &cpu->state.a, &cpu->state.mdr, 0);
 });
 
-op(0xC8, 1, "ret z", {
-    //
-});
+rst(0xC7, 0x00);
+ret(0xC8, "z", cpu->state.f.z);
 
 op(0xC9, 1, "ret", {
     //
 });
 
-op(0xCA, 3, "jp z, $0x%04X", {
-    //
+jmp(0xCA, "z, ", cpu->state.f.z);
+
+op(0xCB, 1, "cb.", { /* This is the prefix opcode */ });
+
+call(0xCC, "z, ", cpu->state.f.z);
+call(0xCD, "", true);
+
+op_arg(0xCE, "adc a, " d8, {
+    __ALUAdd8(cpu, &cpu->state.a, &cpu->state.mdr, cpu->state.f.c);
 });
 
-op(0xCB, 1, "cb.", {
-    /* This is a prefix opcode */
+rst(0xCF, 0x08);
+ret(0xD0, "nc", !cpu->state.f.c);
+pop(0xD1, de);
+jmp(0xD2, "nc, ", !cpu->state.f.c);
+udef(0xD3);
+call(0xD4, "nc, ", !cpu->state.f.c);
+push(0xD5, de);
+
+op_arg(0xD6, "sub " d8, {
+    __ALUSub8(cpu, (SInt8 *)&cpu->state.a, (SInt8 *)&cpu->state.mdr, 0);
 });
 
-op(0xCC, 3, "call z, $0x%04X", {
-    //
-});
-
-op(0xCD, 3, "call $0x%04X", {
-    //
-});
-
-op(0xCE, 2, "adc a, $0x%02X", {
-    //
-});
-
-op(0xCF, 1, "rst 08h", {
-    //
-});
-
-op(0xD0, 1, "ret nc", {
-    //
-});
-
-op(0xD1, 1, "pop de", {
-    //
-});
-
-op(0xD2, 3, "jp nc, $0x%04X", {
-    //
-});
-
-op(0xD3, 1, "ud 0xD3", {
-    //
-});
-
-op(0xD4, 3, "call nc, $0x%04X", {
-    //
-});
-
-op(0xD5, 1, "push de", {
-    //
-});
-
-op(0xD6, 2, "sub $0x%02X", {
-    //
-});
-
-op(0xD7, 1, "rst 10h", {
-    //
-});
-
-op(0xD8, 1, "ret c", {
-    //
-});
+rst(0xD7, 0x10);
+ret(0xD8, "c", cpu->state.f.c);
 
 op(0xD9, 1, "reti", {
     //
 });
 
-op(0xDA, 3, "jp c, $0x%04X", {
+jmp(0xDA, "c, ", cpu->state.f.c);
+udef(0xDB);
+
+call(0xDC, "c, ", cpu->state.f.c);
+udef(0xDD);
+
+op_arg(0xDE, "sbc " d8, {
+    __ALUSub8(cpu, (SInt8 *)&cpu->state.a, (SInt8 *)&cpu->state.mdr, cpu->state.f.c);
+});
+
+rst(0xDF, 0x18);
+
+op(0xE0, 2, "ld " d8 "(" dIO "), a", {
     //
 });
 
-op(0xDB, 1, "ud 0xDB", {
+pop(0xE1, hl);
+
+op(0xE2, 1, "ld c(" dIO "), a", {
     //
 });
 
-op(0xDC, 3, "call c, $0x%04X", {
-    //
-});
+udef(0xE3);
+udef(0xE4);
+push(0xE5, hl);
 
-op(0xDD, 1, "ud 0xDD", {
-    //
-});
+alu_op_arg(0xE6, "and", __ALUAnd8);
 
-op(0xDE, 2, "sbc a, $0x%02X", {
-    //
-});
+rst(0xE7, 0x20);
 
-op(0xDF, 1, "rst 18h", {
-    //
-});
-
-op(0xE0, 2, "ldh $0x%02X(0xFF00), a", {
-    //
-});
-
-op(0xE1, 1, "pop hl", {
-    //
-});
-
-op(0xE2, 1, "ld c(0xFF00), a", {
-    //
-});
-
-op(0xE3, 1, "ud 0xE3", {
-    //
-});
-
-op(0xE4, 1, "ud 0xE4", {
-    //
-});
-
-op(0xE5, 1, "push hl", {
-    //
-});
-
-op(0xE6, 2, "and $0x%02X", {
-    //
-});
-
-op(0xE7, 1, "rst 20h", {
-    //
-});
-
-op(0xE8, 2, "add sp, $0x%02X", {
+op(0xE8, 2, "add sp, " d8, {
     //
 });
 
 op(0xE9, 1, "jp (hl)", {
+    cpu->state.pc = cpu->state.hl;
+
+    cpu->state.mode = kGBProcessorModeFetch;
+});
+
+op(0xEA, 3, "ld (" d16 "), a", {
     //
 });
 
-op(0xEA, 3, "ld ($0x%04X), a", {
-    //
-});
+udef(0xEB);
+udef(0xEC);
+udef(0xED);
 
-op(0xEB, 1, "ud 0xEB", {
-    //
-});
+alu_op_arg(0xEE, "xor", __ALUXor8);
 
-op(0xEC, 1, "ud 0xEC", {
-    //
-});
+rst(0xEF, 0x28);
 
-op(0xED, 1, "ud 0xED", {
-    //
-});
-
-op(0xEE, 2, "xor $0x%02X", {
-    //
-});
-
-op(0xEF, 1, "rst 28h", {
-    //
-});
-
-op(0xF0, 2, "ldh a, $0x%02X(0xFF00)", {
+op(0xF0, 2, "ld a, " d8 "(" dIO ")", {
     //
 });
 
@@ -1034,61 +1054,48 @@ op(0xF1, 1, "pop af", {
     //
 });
 
-op(0xF2, 1, "ld a, c(0xFF00)", {
+op(0xF2, 1, "ld a, c(" dIO ")", {
     //
 });
 
 op(0xF3, 1, "di", {
-    //
+    cpu->state.ime = false;
+
+    cpu->state.mode = kGBProcessorModeFetch;
 });
 
-op(0xF4, 1, "ud 0xF4", {
-    //
-});
+udef(0xF4);
 
 op(0xF5, 1, "push af", {
     //
 });
 
-op(0xF6, 2, "or $0x%02X", {
+alu_op_arg(0xF6, "or", __ALUOr8);
+
+rst(0xF7, 0x30);
+
+op(0xF8, 2, "ld hl, " d8 "(sp)", {
     //
 });
 
-op(0xF7, 1, "rst 30h", {
+op_stall(0xF9, 1, "ld sp, hl", {
+    cpu->state.sp = cpu->state.hl;
+});
+
+op(0xFA, 3, "ld a, (" d16 ")", {
     //
 });
 
-op(0xF8, 2, "ld hl, $0x%02X(sp)", {
-    //
+op_simple(0xFB, "ei", {
+    cpu->state.ime = true;
 });
 
-op(0xF9, 1, "ld sp, hl", {
-    //
-});
+udef(0xFC);
+udef(0xFD);
 
-op(0xFA, 3, "ld a, ($0x%04X)", {
-    //
-});
+alu_op_arg(0xFE, "cp", __ALUCP8);
 
-op(0xFB, 1, "ei", {
-    //
-});
-
-op(0xFC, 1, "ud 0xFC", {
-    //
-});
-
-op(0xFD, 1, "ud 0xFD", {
-    //
-});
-
-op(0xFE, 2, "cp $0x%02X", {
-    //
-});
-
-op(0xFF, 1, "rst 38h", {
-    //
-});
+rst(0xFF, 0x38);
 
 #pragma mark - Prefixed Instructions
 
@@ -1251,6 +1258,8 @@ static const GBProcessorOP *gGBInstructionSet[0x100] = {
 };
 
 #undef expand
+
+#undef format_
 
 #undef op
 #undef declare

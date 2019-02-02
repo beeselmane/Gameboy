@@ -52,16 +52,29 @@ typedef struct __GBMemoryManager {
     GBMemorySpace *romSpace;
     bool *romMasked;
 
-    UInt8 interruptControl;
+    UInt8 *interruptControl;
+
+    UInt16 *mar;
+    UInt8 *mdr;
+    bool *accessed;
+    bool isWrite;
+
+    void (*tick)(struct __GBMemoryManager *this);
 } GBMemoryManager;
 
 GBMemoryManager *GBMemoryManagerCreate(void);
 bool GBMemoryManagerInstallSpace(GBMemoryManager *this, GBMemorySpace *space);
 void GBMemoryManagerDestroy(GBMemoryManager *this);
 
-// Call through to proper space
-void GBMemoryManagerWrite(GBMemoryManager *this, UInt16 address, UInt8 byte);
-UInt8 GBMemoryManagerRead(GBMemoryManager *this, UInt16 address);
+// Call through to proper space. Access will take place on memory line tick.
+void GBMemoryManagerWriteRequest(GBMemoryManager *this, UInt16 *mar, UInt8 *mdr, bool *accessed);
+void GBMemoryManagerReadRequest(GBMemoryManager *this, UInt16 *mar, UInt8 *mdr, bool *accessed);
+
+// Directly accesses memory. For use in tick().
+void __GBMemoryManagerWrite(GBMemoryManager *this, UInt16 address, UInt8 byte);
+UInt8 __GBMemoryManagerRead(GBMemoryManager *this, UInt16 address);
+
+void __GBMemoryManagerTick(GBMemoryManager *this);
 
 extern GBMemorySpace *gGBMemorySpaceNull;
 

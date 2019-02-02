@@ -37,6 +37,13 @@ GBMemoryManager *GBMemoryManagerCreate(void)
         mmu->romSpace = gGBMemorySpaceNull;
 
         mmu->install = NULL;
+
+        mmu->isWrite = false;
+        mmu->accessed = NULL;
+        mmu->mdr = NULL;
+        mmu->mar = NULL;
+
+        mmu->tick = __GBMemoryManagerTick;
     }
 
     return mmu;
@@ -66,12 +73,12 @@ void GBMemoryManagerDestroy(GBMemoryManager *this)
     free(this);
 }
 
-void GBMemoryManagerWrite(GBMemoryManager *this, UInt16 address, UInt8 byte)
+void __GBMemoryManagerWrite(GBMemoryManager *this, UInt16 address, UInt8 byte)
 {
     if (address > 0xFE00) {
         // high memory
         if (!(~address))
-            this->interruptControl = byte;
+            *this->interruptControl = byte;
 
         // Mask top 7 bits. Shift off bottom 5
         GBMemorySpace *space = this->highSpaces[(address & 0x01E0) >> 5];
@@ -82,7 +89,7 @@ void GBMemoryManagerWrite(GBMemoryManager *this, UInt16 address, UInt8 byte)
     }
 }
 
-UInt8 GBMemoryManagerRead(GBMemoryManager *this, UInt16 address)
+UInt8 __GBMemoryManagerRead(GBMemoryManager *this, UInt16 address)
 {
     if (address < 0x100 && (*this->romMasked)) {
         // read rom
@@ -90,7 +97,7 @@ UInt8 GBMemoryManagerRead(GBMemoryManager *this, UInt16 address)
     } else if (address > 0xFE00) {
         // high memory
         if (!(~address))
-            return this->interruptControl;
+            return *this->interruptControl;
 
         // Mask top 7 bits. Shift off bottom 5
         GBMemorySpace *space = this->highSpaces[(address & 0x01E0) >> 5];
@@ -98,6 +105,38 @@ UInt8 GBMemoryManagerRead(GBMemoryManager *this, UInt16 address)
     } else {
         GBMemorySpace *space = this->spaces[address >> 12];
         return space->read(space, address);
+    }
+}
+
+void GBMemoryManagerWriteRequest(GBMemoryManager *this, UInt16 *mar, UInt8 *mdr, bool *accessed)
+{
+    this->accessed = accessed;
+    this->mar = mar;
+    this->mdr = mdr;
+
+    this->isWrite = true;
+}
+
+void GBMemoryManagerReadRequest(GBMemoryManager *this, UInt16 *mar, UInt8 *mdr, bool *accessed)
+{
+    this->accessed = accessed;
+    this->mar = mar;
+    this->mdr = mdr;
+
+    this->isWrite = false;
+}
+
+void __GBMemoryManagerTick(GBMemoryManager *this)
+{
+    if (this->mar && this->mdr)
+    {
+        if (this->isWrite) {
+            __GBMemoryManagerWrite(this, *this->mar, *this->mdr);
+        } else {
+            *this->mdr = __GBMemoryManagerRead(this, *this->mar);
+        }
+
+        (*this->accessed) = true;
     }
 }
 

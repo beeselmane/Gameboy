@@ -12,13 +12,23 @@
             UInt8 l;            \
         };                      \
                                 \
-        UInt16 val;             \
-    } h ## l
+        UInt16 h ## l;          \
+    }
 
 struct __GBProcessor;
 
 enum {
-    kGBProcessorStateFetchStopped = 0
+    kGBProcessorModeHalted     = -2,
+    kGBProcessorModeStopped    = -1,
+    kGBProcessorModeOff        =  0,
+    kGBProcessorModeFetch      =  1,
+    kGBProcessorModePrefix     =  2,
+    kGBProcessorModeStalled    =  3,
+    kGBProcessorModeRun        =  4,
+    kGBProcessorModeWait1      =  5,
+    kGBProcessorModeWait2      =  6,
+    kGBProcessorModeWait3      =  7,
+    kGBProcessorModeWait4      =  8
 };
 
 typedef struct __GBProcessorOP {
@@ -48,26 +58,28 @@ typedef struct __GBProcessor {
                 UInt8 h:1;
                 UInt8 c:1;
                 UInt8 ext:4;
-            } bit;
+            };
             UInt8 reg;
         } f;
 
         UInt16 mar;
-        UInt16 mdr;
+        UInt8 mdr;
         bool accessed;
+
+        UInt8 op;
+        bool prefix;
+
+        UInt8 data; // misc. data for some instructions
+        SInt8 mode;
     } state;
 
     GBProcessorOP *decode_prefix[0xFF];
     GBProcessorOP *decode[0xFF];
 
     void (*tick)(struct __GBProcessor *this);
-
-    void (**nextOP)(struct __GBProcessor *this);
-
-    bool shouldJump;
-    // effective we have these operations:
-    // load, math (+/-), store (backward load), jump, halt
 } GBProcessor;
+
+void GBDispatchOP(GBProcessor *this);
 
 typedef struct __GBProcessorState GBProcessorState;
 

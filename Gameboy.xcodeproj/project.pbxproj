@@ -22,6 +22,7 @@
 		8B430D1A21FBD80000DE5302 /* cart.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B430D1921FBD80000DE5302 /* cart.c */; };
 		8B430D1C21FE787000DE5302 /* cpu.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B430D1B21FE787000DE5302 /* cpu.c */; };
 		8B430D262201F5FA00DE5302 /* disasm.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B430D252201F5FA00DE5302 /* disasm.c */; };
+		8BA00B232203F584009CE00B /* intr.c in Sources */ = {isa = PBXBuildFile; fileRef = 8BA00B222203F584009CE00B /* intr.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -69,6 +70,8 @@
 		8B430D232201627000DE5302 /* gamepad.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = gamepad.h; sourceTree = "<group>"; };
 		8B430D242201F54800DE5302 /* disasm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = disasm.h; sourceTree = "<group>"; };
 		8B430D252201F5FA00DE5302 /* disasm.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = disasm.c; sourceTree = "<group>"; };
+		8BA00B212203F490009CE00B /* intr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = intr.h; sourceTree = "<group>"; };
+		8BA00B222203F584009CE00B /* intr.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = intr.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -143,6 +146,7 @@
 				8B3E99FF21F5766400FA2526 /* mmu.c */,
 				8B3E9A0121F585D800FA2526 /* wram.c */,
 				8B430D1921FBD80000DE5302 /* cart.c */,
+				8BA00B222203F584009CE00B /* intr.c */,
 				8B430D1B21FE787000DE5302 /* cpu.c */,
 				8B430D1D21FE7DC100DE5302 /* 指令集.h */,
 				8B430D252201F5FA00DE5302 /* disasm.c */,
@@ -167,6 +171,7 @@
 				8B430D22220161ED00DE5302 /* dma.h */,
 				8B430D232201627000DE5302 /* gamepad.h */,
 				8B430D242201F54800DE5302 /* disasm.h */,
+				8BA00B212203F490009CE00B /* intr.h */,
 			);
 			path = headers;
 			sourceTree = "<group>";
@@ -297,6 +302,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8BA00B232203F584009CE00B /* intr.c in Sources */,
 				8B3E99E921F5342000FA2526 /* gameboy.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
