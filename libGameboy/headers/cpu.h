@@ -69,7 +69,7 @@ typedef struct __GBProcessor {
         UInt8 op;
         bool prefix;
 
-        UInt8 data; // misc. data for some instructions
+        UInt16 data; // misc. data for some instructions
         SInt8 mode;
     } state;
 

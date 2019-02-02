@@ -7,44 +7,46 @@ GBGameboy *GBGameboyCreate(void)
 
     if (gameboy)
     {
+        bzero(gameboy, sizeof(GBGameboy));
+        bool success = true;
+
         gameboy->cartInstalled = false;
         gameboy->biosInstalled = false;
 
         gameboy->cpu = GBProcessorCreate();
+        success &= !!gameboy->cpu;
 
-        if (!gameboy->cpu)
-        {
-            free(gameboy);
-
-            return NULL;
-        }
+        gameboy->driver = GBGraphicsDriverCreate();
+        success &= !!gameboy->driver;
 
         gameboy->mmio = GBIOMapperCreate();
-
-        if (!gameboy->mmio)
-        {
-            GBProcessorDestroy(gameboy->cpu);
-
-            return NULL;
-        }
+        success &= !!gameboy->mmio;
 
         gameboy->wram = GBWorkRAMCreate();
+        success &= !!gameboy->wram;
 
-        if (!gameboy->wram)
-        {
-            GBIOMapperDestroy(gameboy->mmio);
-            GBProcessorDestroy(gameboy->cpu);
-
-            return NULL;
-        }
+        gameboy->vram = GBVideoRAMCreate();
+        success &= !!gameboy->vram;
 
         gameboy->clock = GBClockCreate();
+        success &= !!gameboy->clock;
 
-        if (!gameboy->clock)
+        if (!success)
         {
-            GBWorkRAMDestroy(gameboy->wram);
-            GBIOMapperDestroy(gameboy->mmio);
-            GBProcessorDestroy(gameboy->cpu);
+            if (gameboy->wram)
+                GBWorkRAMDestroy(gameboy->wram);
+
+            if (gameboy->vram)
+                GBVideoRAMDestroy(gameboy->vram);
+
+            if (gameboy->mmio)
+                GBIOMapperDestroy(gameboy->mmio);
+
+            if (gameboy->driver)
+                GBGraphicsDriverDestroy(gameboy->driver);
+
+            if (gameboy->cpu)
+                GBProcessorDestroy(gameboy->cpu);
 
             return NULL;
         }
@@ -53,13 +55,17 @@ GBGameboy *GBGameboyCreate(void)
 
         installed &= gameboy->mmio->install(gameboy->mmio, gameboy);
         installed &= gameboy->wram->install(gameboy->wram, gameboy);
+        installed &= gameboy->vram->install(gameboy->vram, gameboy);
+        installed &= gameboy->driver->install(gameboy->driver, gameboy);
         installed &= gameboy->clock->install(gameboy->clock, gameboy);
 
         if (!installed)
         {
             GBClockDestroy(gameboy->clock);
             GBWorkRAMDestroy(gameboy->wram);
+            GBVideoRAMDestroy(gameboy->vram);
             GBIOMapperDestroy(gameboy->mmio);
+            GBGraphicsDriverDestroy(gameboy->driver);
             GBProcessorDestroy(gameboy->cpu);
 
             return NULL;

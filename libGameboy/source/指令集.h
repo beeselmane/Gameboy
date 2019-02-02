@@ -436,38 +436,117 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
 #pragma mark - Control flow macros
 
 // TODO: Implement these
-#define jr(code, str, cond)                                                 \
-    op_wait_stall(code, 2, "jr " str d8, {                                  \
-        __GBProcessorReadArgument(cpu);                                     \
-    }, {                                                                    \
-        if (!cond)                                                          \
-        {                                                                   \
-            cpu->state.mode = kGBProcessorModeFetch;                        \
-                                                                            \
-            return;                                                         \
-        }                                                                   \
-                                                                            \
-        cpu->state.pc += __ALUSignExtend(cpu->state.mdr);                   \
+#define jr(code, str, cond)                                                             \
+    op_wait_stall(code, 2, "jr " str d8, {                                              \
+        __GBProcessorReadArgument(cpu);                                                 \
+    }, {                                                                                \
+        if (!cond)                                                                      \
+        {                                                                               \
+            cpu->state.mode = kGBProcessorModeFetch;                                    \
+                                                                                        \
+            return;                                                                     \
+        }                                                                               \
+                                                                                        \
+        cpu->state.pc += __ALUSignExtend(cpu->state.mdr);                               \
     })
 
-#define jmp(code, str, cond)                                                \
-    op(code, 3, "jp " str d16, {                                            \
-        /* */                                                               \
+#define jmp(code, str, cond)                                                            \
+    op_wait2_stall(code, 3, "jp " str d16, {                                            \
+        __GBProcessorReadArgument(cpu);                                                 \
+    }, {                                                                                \
+        __GBProcessorReadArgument(cpu);                                                 \
+                                                                                        \
+        cpu->state.data = cpu->state.mdr;                                               \
+    }, {                                                                                \
+        if (!cond)                                                                      \
+        {                                                                               \
+            cpu->state.mode = kGBProcessorModeFetch;                                    \
+                                                                                        \
+            return;                                                                     \
+        }                                                                               \
+                                                                                        \
+        cpu->state.pc = cpu->state.data | (cpu->state.mdr << 8);                        \
     })
 
-#define call(code, str, cond)                                               \
-    op(code, 3, "call " str d16, {                                          \
-        /* */                                                               \
+#define call(code, str, cond)                                                           \
+    op(code, 3, "call " str d16, {                                                      \
+        if (cpu->state.mode == kGBProcessorModeRun) {                                   \
+            __GBProcessorReadArgument(cpu);                                             \
+                                                                                        \
+            cpu->state.mode = kGBProcessorModeWait1;                                    \
+        } else if (cpu->state.mode == kGBProcessorModeWait1) {                          \
+            if (cpu->state.accessed)                                                    \
+            {                                                                           \
+                cpu->state.data = cpu->state.mdr;                                       \
+                                                                                        \
+                __GBProcessorReadArgument(cpu);                                         \
+                                                                                        \
+                cpu->state.mode = kGBProcessorModeWait2;                                \
+            }                                                                           \
+        } else if (cpu->state.mode == kGBProcessorModeWait2) {                          \
+            if (cpu->state.accessed)                                                    \
+            {                                                                           \
+                cpu->state.data |= (cpu->state.mdr << 8);                               \
+                                                                                        \
+                if (!cond)                                                              \
+                {                                                                       \
+                    cpu->state.mode = kGBProcessorModeFetch;                            \
+                                                                                        \
+                    return;                                                             \
+                }                                                                       \
+                                                                                        \
+                __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.pc >> 8);           \
+                cpu->state.mode = kGBProcessorModeWait3;                                \
+            }                                                                           \
+        } else if (cpu->state.mode == kGBProcessorModeWait3) {                          \
+            if (cpu->state.accessed)                                                    \
+            {                                                                           \
+                __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.pc & 0xFF);         \
+                                                                                        \
+                cpu->state.mode = kGBProcessorModeWait4;                                \
+            }                                                                           \
+        } else if (cpu->state.mode == kGBProcessorModeWait4) {                          \
+            if (cpu->state.accessed)                                                    \
+            {                                                                           \
+                __GBProcessorRead(cpu, 0x0000);                                         \
+                                                                                        \
+                cpu->state.pc = cpu->state.data;                                        \
+                                                                                        \
+                cpu->state.mode = kGBProcessorModeStalled;                              \
+            }                                                                           \
+        } else if (cpu->state.mode == kGBProcessorModeStalled) {                        \
+            if (cpu->state.accessed)                                                    \
+                cpu->state.mode = kGBProcessorModeFetch;                                \
+        }                                                                               \
     })
 
-#define ret(code, str, cond)                                                \
-    op(code, 1, "ret " str, {                                               \
-        /* */                                                               \
+#define ret(code, str, cond)                                                            \
+    op_wait3_stall(code, 1, "ret " str, {                                               \
+        __GBProcessorRead(cpu, 0x0000);                                                 \
+    }, {                                                                                \
+        if (!cond)                                                                      \
+        {                                                                               \
+            cpu->state.mode = kGBProcessorModeFetch;                                    \
+                                                                                        \
+            return;                                                                     \
+        }                                                                               \
+                                                                                        \
+        __GBProcessorRead(cpu, cpu->state.sp++);                                        \
+    }, {                                                                                \
+        __GBProcessorRead(cpu, cpu->state.sp++);                                        \
+                                                                                        \
+        cpu->state.pc = cpu->state.mdr;                                                 \
+    }, {                                                                                \
+        cpu->state.pc |= cpu->state.mdr << 8;                                           \
     })
 
-#define rst(code, dst)                                                      \
-    op(code, 1, "rst $" #dst, {                                             \
-        /* */                                                               \
+#define rst(code, dst)                                                                  \
+    op_wait2_stall(code, 1, "rst $" #dst, {                                             \
+        cpu->state.pc = dst;                                                            \
+    }, {                                                                                \
+        __GBProcessorRead(cpu, 0x0000);                                                 \
+    }, {                                                                                \
+        /* nothing */                                                                   \
     })
 
 #pragma mark - Stack manipulation macros
@@ -1234,119 +1313,249 @@ rst(0xFF, 0x38);
 
 #pragma mark - Prefixed Instructions
 
-#define rlc(code, reg)                          \
-    op_pre(code, 1, "rlc " #reg, {              \
-        /* */                                   \
+#define rlc(code, reg)                                                      \
+    op_pre_simple(code, "rlc " #reg, {                                      \
+        __ALURotateLeft(&cpu->state.reg, 1);                                \
+                                                                            \
+        cpu->state.f.z = !cpu->state.reg;                                   \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = 0;                                                 \
+        cpu->state.f.c = cpu->state.reg & 1;                                \
     })
 
-#define rrc(code, reg)                          \
-    op_pre(code, 1, "rrc " #reg, {              \
-        /* */                                   \
+#define rlc_hl(code)                                                        \
+    op_pre_hl(code, "rlc (hl)", {                                           \
+        __ALURotateLeft(&cpu->state.mdr, 1);                                \
+                                                                            \
+        cpu->state.f.z = !cpu->state.mdr;                                   \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = 0;                                                 \
+        cpu->state.f.c = cpu->state.mdr & 1;                                \
     })
 
-#define rl(code, reg)                           \
-    op_pre(code, 1, "rl " #reg, {               \
-        /* */                                   \
+#define rrc(code, reg)                                                      \
+    op_pre_simple(code, "rrc " #reg, {                                      \
+        cpu->state.f.z = !cpu->state.reg;                                   \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = 0;                                                 \
+        cpu->state.f.c = cpu->state.reg & 1;                                \
+                                                                            \
+        __ALURotateRight(&cpu->state.reg, 1);                               \
     })
 
-#define rr(code, reg)                           \
-    op_pre(code, 1, "rr " #reg, {               \
-        /* */                                   \
+#define rrc_hl(code)                                                        \
+    op_pre_simple(code, "rrc (hl)", {                                       \
+        cpu->state.f.z = !cpu->state.mdr;                                   \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = 0;                                                 \
+        cpu->state.f.c = cpu->state.mdr & 1;                                \
+                                                                            \
+        __ALURotateRight(&cpu->state.mdr, 1);                               \
     })
 
-#define sla(code, reg)                          \
-    op_pre(code, 1, "sla " #reg, {              \
-        /* */                                   \
+#define rl(code, reg)                                                       \
+    op_pre_simple(code, "rl " #reg, {                                       \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = cpu->state.f.c;                                    \
+        cpu->state.f.c = cpu->state.reg >> 7;                               \
+                                                                            \
+        cpu->state.reg <<= 1;                                               \
+        cpu->state.reg |= cpu->state.f.h;                                   \
+        cpu->state.f.z = !cpu->state.reg;                                   \
+        cpu->state.f.h = 0;                                                 \
     })
 
-#define sra(code, reg)                          \
-    op_pre(code, 1, "sra " #reg, {              \
-        /* */                                   \
+#define rl_hl(code)                                                         \
+    op_pre_hl(code, "rl (hl)", {                                            \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = cpu->state.f.c;                                    \
+        cpu->state.f.c = cpu->state.mdr >> 7;                               \
+                                                                            \
+        cpu->state.mdr <<= 1;                                               \
+        cpu->state.mdr |= cpu->state.f.h;                                   \
+        cpu->state.f.z = !cpu->state.mdr;                                   \
+        cpu->state.f.h = 0;                                                 \
     })
 
-#define swap(code, reg)                         \
-    op_pre(code, 1, "swap " #reg, {             \
-        /* */                                   \
+#define rr(code, reg)                                                       \
+    op_pre_simple(code, "rr " #reg, {                                       \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = cpu->state.f.c;                                    \
+        cpu->state.f.c = cpu->state.reg & 1;                                \
+                                                                            \
+        cpu->state.reg >>= 1;                                               \
+        cpu->state.reg |= cpu->state.f.h << 7;                              \
+        cpu->state.f.z = !cpu->state.reg;                                   \
+        cpu->state.f.h = 0;                                                 \
     })
 
-#define srl(code, reg)                          \
-    op_pre(code, 1, "srl " #reg, {              \
-        /* */                                   \
+#define rr_hl(code)                                                         \
+    op_pre_hl(code, "rr (hl)", {                                            \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = cpu->state.f.c;                                    \
+        cpu->state.f.c = cpu->state.mdr & 1;                                \
+                                                                            \
+        cpu->state.mdr >>= 1;                                               \
+        cpu->state.mdr |= cpu->state.f.h << 7;                              \
+        cpu->state.f.z = !cpu->state.mdr;                                   \
+        cpu->state.f.h = 0;                                                 \
     })
 
-#define bit(code, pos, reg)                                 \
-    op_pre_simple(code, "bit " #pos ", " #reg, {            \
-        cpu->state.f.z = !((cpu->state.reg >> pos) & 1);    \
-        cpu->state.f.n = 0;                                 \
-        cpu->state.f.h = 1;                                 \
+#define sla(code, reg)                                                      \
+    op_pre_simple(code, "sla " #reg, {                                      \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = 0;                                                 \
+        cpu->state.f.c = cpu->state.reg >> 7;                               \
+                                                                            \
+        cpu->state.reg <<= 1;                                               \
+        cpu->state.f.z = !cpu->state.reg;                                   \
     })
 
-#define bit_hl(code, pos)                                   \
-    op_pre_hl(code, "bit " #pos ", (hl)", {                 \
-        cpu->state.f.z = !((cpu->state.mdr >> pos) & 1);    \
-        cpu->state.f.n = 0;                                 \
-        cpu->state.f.h = 1;                                 \
+#define sla_hl(code)                                                        \
+    op_pre_hl(code, "sla (hl)", {                                           \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = 0;                                                 \
+        cpu->state.f.c = cpu->state.mdr >> 7;                               \
+                                                                            \
+        cpu->state.mdr <<= 1;                                               \
+        cpu->state.f.z = !cpu->state.mdr;                                   \
     })
 
-#define res(code, pos, reg)                                 \
-    op_pre_simple(code, "res " #pos ", " #reg, {            \
-        cpu->state.reg &= ~(1 << pos);                      \
+#define sra(code, reg)                                                      \
+    op_pre_simple(code, "sra " #reg, {                                      \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = 0;                                                 \
+        cpu->state.f.c = cpu->state.reg & 1;                                \
+                                                                            \
+        cpu->state.reg >>= 1;                                               \
+        cpu->state.reg |= (cpu->state.reg >> 6);                            \
+        cpu->state.f.z = !cpu->state.reg;                                   \
     })
 
-#define res_hl(code, pos)                                   \
-    op_pre_hl(code, "res " #pos ", (hl)", {                 \
-        cpu->state.mdr &= ~(1 << pos);                      \
+#define sra_hl(code)                                                        \
+    op_pre_hl(code, "sra (hl)", {                                           \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = 0;                                                 \
+        cpu->state.f.c = cpu->state.mdr & 1;                                \
+                                                                            \
+        cpu->state.mdr >>= 1;                                               \
+        cpu->state.mdr |= (cpu->state.mdr >> 6);                            \
+        cpu->state.f.z = !cpu->state.mdr;                                   \
     })
 
-#define set(code, pos, reg)                                 \
-    op_pre_simple(code, "set " #pos ", " #reg, {            \
-        cpu->state.reg |= (1 << pos);                       \
+#define swap(code, reg)                                                     \
+    op_pre_simple(code, "swap " #reg, {                                     \
+        cpu->state.reg = (cpu->state.reg >> 4) | (cpu->state.reg << 4);     \
+                                                                            \
+        cpu->state.f.z = !cpu->state.reg;                                   \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = 0;                                                 \
+        cpu->state.f.c = 0;                                                 \
     })
 
-#define set_hl(code, pos)                                   \
-    op_pre_hl(code, "set " #pos ", (hl)", {                 \
-        cpu->state.mdr |= (1 << pos);                       \
+#define swap_hl(code)                                                       \
+    op_pre_simple(code, "swap (hl)", {                                      \
+        cpu->state.mdr = (cpu->state.mdr >> 4) | (cpu->state.mdr << 4);     \
+                                                                            \
+        cpu->state.f.z = !cpu->state.mdr;                                   \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = 0;                                                 \
+        cpu->state.f.c = 0;                                                 \
     })
 
-rlc(0x00, b);    rlc(0x01, c);
-rlc(0x02, d);    rlc(0x03, e);
-rlc(0x04, h);    rlc(0x05, l);
-rlc(0x06, (hl)); rlc(0x07, a);
+#define srl(code, reg)                                                      \
+    op_pre_simple(code, "srl " #reg, {                                      \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = 0;                                                 \
+        cpu->state.f.c = cpu->state.reg & 1;                                \
+                                                                            \
+        cpu->state.reg >>= 1;                                               \
+        cpu->state.f.z = !cpu->state.reg;                                   \
+    })
 
-rrc(0x08, b);    rrc(0x09, c);
-rrc(0x0A, d);    rrc(0x0B, e);
-rrc(0x0C, h);    rrc(0x0D, l);
-rrc(0x0E, (hl)); rrc(0x0F, a);
+#define srl_hl(code)                                                        \
+    op_pre_hl(code, "srl (hl)", {                                           \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = 0;                                                 \
+        cpu->state.f.c = cpu->state.mdr & 1;                                \
+                                                                            \
+        cpu->state.mdr >>= 1;                                               \
+        cpu->state.f.z = !cpu->state.mdr;                                   \
+    })
 
-rl(0x10, b);    rl(0x11, c);
-rl(0x12, d);    rl(0x13, e);
-rl(0x14, h);    rl(0x15, l);
-rl(0x16, (hl)); rl(0x17, a);
+#define bit(code, pos, reg)                                                 \
+    op_pre_simple(code, "bit " #pos ", " #reg, {                            \
+        cpu->state.f.z = !((cpu->state.reg >> pos) & 1);                    \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = 1;                                                 \
+    })
 
-rr(0x18, b);    rr(0x19, c);
-rr(0x1A, d);    rr(0x1B, e);
-rr(0x1C, h);    rr(0x1D, l);
-rr(0x1E, (hl)); rr(0x1F, a);
+#define bit_hl(code, pos)                                                   \
+    op_pre_hl(code, "bit " #pos ", (hl)", {                                 \
+        cpu->state.f.z = !((cpu->state.mdr >> pos) & 1);                    \
+        cpu->state.f.n = 0;                                                 \
+        cpu->state.f.h = 1;                                                 \
+    })
 
-sla(0x20, b);    sla(0x21, c);
-sla(0x22, d);    sla(0x23, e);
-sla(0x24, h);    sla(0x25, l);
-sla(0x26, (hl)); sla(0x27, a);
+#define res(code, pos, reg)                                                 \
+    op_pre_simple(code, "res " #pos ", " #reg, {                            \
+        cpu->state.reg &= ~(1 << pos);                                      \
+    })
 
-sra(0x28, b);    sra(0x29, c);
-sra(0x2A, d);    sra(0x2B, e);
-sra(0x2C, h);    sra(0x2D, l);
-sra(0x2E, (hl)); sra(0x2F, a);
+#define res_hl(code, pos)                                                   \
+    op_pre_hl(code, "res " #pos ", (hl)", {                                 \
+        cpu->state.mdr &= ~(1 << pos);                                      \
+    })
 
-swap(0x30, b);    swap(0x31, c);
-swap(0x32, d);    swap(0x33, e);
-swap(0x34, h);    swap(0x35, l);
-swap(0x36, (hl)); swap(0x37, a);
+#define set(code, pos, reg)                                                 \
+    op_pre_simple(code, "set " #pos ", " #reg, {                            \
+        cpu->state.reg |= (1 << pos);                                       \
+    })
 
-srl(0x38, b);    srl(0x39, c);
-srl(0x3A, d);    srl(0x3B, e);
-srl(0x3C, h);    srl(0x3D, l);
-srl(0x3E, (hl)); srl(0x3F, a);
+#define set_hl(code, pos)                                                   \
+    op_pre_hl(code, "set " #pos ", (hl)", {                                 \
+        cpu->state.mdr |= (1 << pos);                                       \
+    })
+
+rlc(0x00, b); rlc(0x01, c);
+rlc(0x02, d); rlc(0x03, e);
+rlc(0x04, h); rlc(0x05, l);
+rlc_hl(0x06); rlc(0x07, a);
+
+rrc(0x08, b); rrc(0x09, c);
+rrc(0x0A, d); rrc(0x0B, e);
+rrc(0x0C, h); rrc(0x0D, l);
+rrc_hl(0x0E); rrc(0x0F, a);
+
+rl(0x10, b); rl(0x11, c);
+rl(0x12, d); rl(0x13, e);
+rl(0x14, h); rl(0x15, l);
+rl_hl(0x16); rl(0x17, a);
+
+rr(0x18, b); rr(0x19, c);
+rr(0x1A, d); rr(0x1B, e);
+rr(0x1C, h); rr(0x1D, l);
+rr_hl(0x1E); rr(0x1F, a);
+
+sla(0x20, b); sla(0x21, c);
+sla(0x22, d); sla(0x23, e);
+sla(0x24, h); sla(0x25, l);
+sla_hl(0x26); sla(0x27, a);
+
+sra(0x28, b); sra(0x29, c);
+sra(0x2A, d); sra(0x2B, e);
+sra(0x2C, h); sra(0x2D, l);
+sra_hl(0x2E); sra(0x2F, a);
+
+swap(0x30, b); swap(0x31, c);
+swap(0x32, d); swap(0x33, e);
+swap(0x34, h); swap(0x35, l);
+swap_hl(0x36); swap(0x37, a);
+
+srl(0x38, b); srl(0x39, c);
+srl(0x3A, d); srl(0x3B, e);
+srl(0x3C, h); srl(0x3D, l);
+srl_hl(0x3E); srl(0x3F, a);
 
 bit(0x40, 0, b); bit(0x41, 0, c); bit(0x42, 0, d); bit(0x43, 0, e); bit(0x44, 0, h); bit(0x45, 0, l); bit_hl(0x46, 0); bit(0x47, 0, a);
 bit(0x48, 1, b); bit(0x49, 1, c); bit(0x4A, 1, d); bit(0x4B, 1, e); bit(0x4C, 1, h); bit(0x4D, 1, l); bit_hl(0x4E, 1); bit(0x4F, 1, a);

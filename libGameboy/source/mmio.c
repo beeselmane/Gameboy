@@ -35,7 +35,7 @@ GBIOMapper *GBIOMapperCreate(void)
         mapper->startAddress = kGBIOMapperFirstAddress;
         mapper->endAddress = kGBIOMapperFinalAddress;
 
-        memcpy(mapper->portMap, gGBIOMapperNullPorts, (kGBIOMapperFinalAddress - kGBIOMapperFirstAddress) + 1);
+        memcpy(mapper->portMap, gGBIOMapperNullPorts, ((kGBIOMapperFinalAddress - kGBIOMapperFirstAddress) + 1) * sizeof(GBIORegister *));
     }
 
     return mapper;

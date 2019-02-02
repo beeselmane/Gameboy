@@ -26,6 +26,8 @@ struct __GBGameboy {
     GBProcessor *cpu;
     GBIOMapper *mmio;
     GBWorkRAM *wram;
+    GBVideoRAM *vram;
+    GBGraphicsDriver *driver;
     GBClock *clock;
 
     GBCartridge *cart;

@@ -6,12 +6,66 @@
     #include <Security/Security.h>
 #endif /* defined(__APPLE__) */
 
+#pragma mark - High RAM
+
+GBHighRAM *GBHighRAMCreate(void)
+{
+    GBHighRAM *ram = malloc(sizeof(GBHighRAM));
+
+    if (ram)
+    {
+        // High RAM gets installed with work RAM.
+        ram->install = (void *)__GBWorkRAMOnInstall;
+
+        ram->write = __GBHighRAMWrite;
+        ram->read = __GBHighRAMRead;
+
+        ram->start = kGBHighRAMStart;
+        ram->end = kGBHighRAMEnd;
+
+        #ifdef __APPLE__
+            // This warns if we ignore the result implicitly
+            __unused int result = SecRandomCopyBytes(kSecRandomDefault, kGBHighRAMSize, ram->memory);
+        #else /* !defined(__APPLE__) */
+            bzero(ram->memory, kGBWorkRAMSize);
+        #endif /* defined(__APPLE__) */
+    }
+
+    return ram;
+}
+
+void GBHighRAMDestroy(GBHighRAM *this)
+{
+    free(this);
+}
+
+void __GBHighRAMWrite(GBHighRAM *this, UInt16 address, UInt8 byte)
+{
+    this->memory[address & (~kGBHighRAMStart)] = byte;
+}
+
+UInt8 __GBHighRAMRead(GBHighRAM *this, UInt16 address)
+{
+    return this->memory[address & (~kGBHighRAMStart)];
+}
+
+#pragma mark - Work RAM
+
 GBWorkRAM *GBWorkRAMCreate(void)
 {
     GBWorkRAM *ram = malloc(sizeof(GBWorkRAM));
 
     if (ram)
     {
+        ram->hram = GBHighRAMCreate();
+
+        if (!ram->hram)
+        {
+            free(ram);
+
+            return NULL;
+        }
+
         ram->install = __GBWorkRAMOnInstall;
 
         ram->write = __GBWorkRAMWrite;
@@ -48,5 +102,8 @@ UInt8 __GBWorkRAMRead(GBWorkRAM *this, UInt16 address)
 
 bool __GBWorkRAMOnInstall(GBWorkRAM *this, GBGameboy *gameboy)
 {
-    return GBMemoryManagerInstallSpace(gameboy->cpu->mmu, (GBMemorySpace *)this);
+    bool success = GBMemoryManagerInstallSpace(gameboy->cpu->mmu, (GBMemorySpace *)this);
+    success &= GBMemoryManagerInstallSpace(gameboy->cpu->mmu, (GBMemorySpace *)this->hram);
+
+    return success;
 }

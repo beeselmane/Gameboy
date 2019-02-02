@@ -51,6 +51,8 @@ GBMemoryManager *GBMemoryManagerCreate(void)
 
 bool GBMemoryManagerInstallSpace(GBMemoryManager *this, GBMemorySpace *space)
 {
+    fprintf(stdout, "Note: Installed 0x%04X --> 0x%04X\n", space->start, space->end);
+
     if (space->end < 0xFE00) {
         if (space->start & 0x0FFF || ~space->end & 0x0FFF)
             return false;
@@ -58,12 +60,26 @@ bool GBMemoryManagerInstallSpace(GBMemoryManager *this, GBMemorySpace *space)
         UInt16 realEnd = (space->end & 0xF000) >> 12;
         UInt16 realStart = space->start >> 12;
 
-        for (UInt8 i = realStart; i < realEnd; i++)
+        for (UInt8 i = realStart; i <= realEnd; i++)
             this->spaces[i] = space;
 
         return true;
     } else {
-        // TODO: High space install
+        // (address & 0x01E0) >> 5
+
+        if (space->start & 0x1F)
+            return false;
+
+        if (~space->end & 0x1F)
+            if (space->end != 0xFFFE)
+                return false;
+
+        UInt16 start = (space->start & 0x01E0) >> 5;
+        UInt16 end = (space->end & 0x01E0) >> 5;
+
+        for (UInt8 i = start; i <= end; i++)
+            this->highSpaces[i] = space;
+
         return true;
     }
 }

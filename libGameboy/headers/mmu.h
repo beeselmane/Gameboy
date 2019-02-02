@@ -27,6 +27,11 @@
 // 0xFF80 --> 0xFFFE (hram)
 // 0xFFFF --- interrupt control
 
+// FE00
+// FEA0
+// FF00
+// FF80
+
 #define kGBMemoryBankSize 0x1000
 #define kGBMemoryBankMask 0xF000
 

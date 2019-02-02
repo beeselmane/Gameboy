@@ -80,8 +80,9 @@ GBGameboy *gameboy;
     [_boxHF setStringValue:[NSString stringWithFormat:@"%d", gameboy->cpu->state.f.h]];
     [_boxCF setStringValue:[NSString stringWithFormat:@"%d", gameboy->cpu->state.f.c]];
 
-    UInt8 buffer[3];
+    UInt8 buffer[4];
     UInt16 pc = gameboy->cpu->state.pc;
+    UInt8 i = 0;
     UInt8 op;
 
     while ((op = __GBMemoryManagerRead(gameboy->cpu->mmu, pc)) != gameboy->cpu->state.op)
@@ -92,8 +93,8 @@ GBGameboy *gameboy;
             break;
     }
 
-    if (pc && __GBMemoryManagerRead(gameboy->cpu->mmu, pc - 1) == 0xCB)
-        pc--;
+    if (gameboy->cpu->state.prefix)
+        buffer[i++] = 0xCB;
 
     buffer[0] = __GBMemoryManagerRead(gameboy->cpu->mmu, pc + 0);
     buffer[1] = __GBMemoryManagerRead(gameboy->cpu->mmu, pc + 1);
