@@ -19,6 +19,58 @@
 
 // fetch, increment, decode, prefix (wait), fetch, increment, decode, perform
 
+GBProcessor *GBProcessorCreate(void)
+{
+    GBProcessor *cpu = malloc(sizeof(GBProcessor));
+
+    if (cpu)
+    {
+        cpu->mmu = GBMemoryManagerCreate();
+
+        if (!cpu->mmu)
+        {
+            free(cpu);
+
+            return NULL;
+        }
+
+        cpu->state.mode = kGBProcessorModeOff;
+
+        cpu->state.ime = false;
+        cpu->state.a = 0;
+
+        cpu->state.bc = 0;
+        cpu->state.de = 0;
+        cpu->state.hl = 0;
+
+        cpu->state.sp = 0;
+        cpu->state.pc = 0;
+
+        cpu->state.accessed = false;
+        cpu->state.mar = 0;
+        cpu->state.mdr = 0;
+
+        cpu->state.prefix = false;
+        cpu->state.op = 0;
+
+        cpu->state.data = 0;
+
+        memcpy(cpu->decode_prefix, gGBInstructionSetCB, 0x100 * sizeof(GBProcessorOP *));
+        memcpy(cpu->decode, gGBInstructionSet, 0x100 * sizeof(GBProcessorOP *));
+
+        cpu->tick = __GBProcessorTick;
+    }
+
+    return cpu;
+}
+
+void GBProcessorDestroy(GBProcessor *this)
+{
+    GBMemoryManagerDestroy(this->mmu);
+
+    free(this);
+}
+
 void GBDispatchOP(GBProcessor *this)
 {
     GBProcessorOP *op;
@@ -32,7 +84,7 @@ void GBDispatchOP(GBProcessor *this)
     op->go(op, this);
 }
 
-void GBProcessorTick(GBProcessor *this)
+void __GBProcessorTick(GBProcessor *this)
 {
     switch (this->state.mode)
     {
@@ -82,21 +134,6 @@ void GBProcessorTick(GBProcessor *this)
             GBDispatchOP(this);
         } break;
     }
-
-#if 0
-    UInt8 instruction = GBMemoryManagerRead(this->mmu, this->state.pc++);
-    GBProcessorOP *operation;
-
-    if (instruction == 0xCB) {
-        // prefix. Wait until next read cycle.
-        operation = this->decode_prefix[instruction];
-    } else {
-        // normal. decode immidietely.
-        operation = this->decode[instruction];
-    }
-
-    operation->go(operation, this);
-#endif
 
     // check for interrupt here
 }

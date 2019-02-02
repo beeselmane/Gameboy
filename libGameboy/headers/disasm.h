@@ -20,4 +20,6 @@ typedef struct {
 
 GBDisassemblyInfo **GBDisassemblerProcess(UInt8 *code, UInt32 length, UInt32 *instructions);
 
+GBDisassemblyInfo *GBDisassembleSingle(UInt8 *code, UInt32 length, UInt32 *used);
+
 #endif /* !defined(__gameboy_disasm__) */

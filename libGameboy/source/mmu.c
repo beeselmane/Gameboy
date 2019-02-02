@@ -64,7 +64,7 @@ bool GBMemoryManagerInstallSpace(GBMemoryManager *this, GBMemorySpace *space)
         return true;
     } else {
         // TODO: High space install
-        return false;
+        return true;
     }
 }
 
@@ -91,7 +91,7 @@ void __GBMemoryManagerWrite(GBMemoryManager *this, UInt16 address, UInt8 byte)
 
 UInt8 __GBMemoryManagerRead(GBMemoryManager *this, UInt16 address)
 {
-    if (address < 0x100 && (*this->romMasked)) {
+    if (address < 0x100 && !(*this->romMasked)) {
         // read rom
         return this->romSpace->read(this->romSpace, address);
     } else if (address > 0xFE00) {

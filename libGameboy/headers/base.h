@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef uint64_t UInt64;
 typedef uint32_t UInt32;
 typedef uint16_t UInt16;
 typedef uint8_t  UInt8;

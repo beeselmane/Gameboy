@@ -124,3 +124,76 @@ GBDisassemblyInfo **GBDisassemblerProcess(UInt8 *code, UInt32 length, UInt32 *in
 
     return result;
 }
+
+GBDisassemblyInfo *GBDisassembleSingle(UInt8 *code, UInt32 length, UInt32 *used)
+{
+    if (length < 1)
+        return NULL;
+
+    const GBDisassemblerOP *op = NULL;
+    UInt8 opcode = code[0];
+
+    if (opcode == 0xCB)
+    {
+        if (length < 2)
+            return NULL;
+
+        op = gGBDisassemblerTableCB[code[1]];
+        opcode = code[1];
+
+        GBDisassemblyInfo *result = malloc(sizeof(GBDisassemblyInfo));
+        if (!result) return NULL;
+
+        result->instruction = opcode;
+        result->argument = 0;
+        result->offset = 0;
+
+        asprintf(&result->string, "%s", op->format);
+
+        if (!result->string)
+        {
+            free(result);
+
+            return NULL;
+        }
+
+        return result;
+    }
+
+    op = gGBDisassemblerTable[opcode];
+
+    if (op->length > length)
+        return NULL;
+
+    GBDisassemblyInfo *result = malloc(sizeof(GBDisassemblyInfo));
+    if (!result) return NULL;
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-security"
+    switch (op->length)
+    {
+        case 1: {
+            asprintf(&result->string, op->format);
+            result->argument = 0;
+        } break;
+        case 2: {
+            UInt8 argument = code[1];
+            result->argument = argument;
+
+            asprintf(&result->string, op->format, argument);
+        } break;
+        case 3: {
+            UInt16 argument = code[1];
+            argument |= ((UInt16)(code[2])) << 8;
+
+            asprintf(&result->string, op->format, argument);
+            result->argument = argument;
+        } break;
+    }
+#pragma clang diagnostic pop
+
+    result->instruction = opcode;
+    result->offset = 0;
+
+    return result;
+}

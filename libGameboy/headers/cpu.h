@@ -8,8 +8,8 @@
     union {                     \
         struct                  \
         {                       \
-            UInt8 h;            \
             UInt8 l;            \
+            UInt8 h;            \
         };                      \
                                 \
         UInt16 h ## l;          \
@@ -53,11 +53,11 @@ typedef struct __GBProcessor {
 
         union {
             struct {
-                UInt8 z:1;
-                UInt8 n:1;
-                UInt8 h:1;
-                UInt8 c:1;
                 UInt8 ext:4;
+                UInt8 c:1;
+                UInt8 h:1;
+                UInt8 n:1;
+                UInt8 z:1;
             };
             UInt8 reg;
         } f;
@@ -73,13 +73,17 @@ typedef struct __GBProcessor {
         SInt8 mode;
     } state;
 
-    GBProcessorOP *decode_prefix[0xFF];
-    GBProcessorOP *decode[0xFF];
+    GBProcessorOP *decode_prefix[0x100];
+    GBProcessorOP *decode[0x100];
 
     void (*tick)(struct __GBProcessor *this);
 } GBProcessor;
 
+GBProcessor *GBProcessorCreate(void);
 void GBDispatchOP(GBProcessor *this);
+void GBProcessorDestroy(GBProcessor *this);
+
+void __GBProcessorTick(GBProcessor *this);
 
 typedef struct __GBProcessorState GBProcessorState;
 

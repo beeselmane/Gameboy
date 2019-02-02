@@ -25,6 +25,12 @@ UInt8 __GBBIOSMaskPortRead(GBBIOSMaskPort *port);
 typedef struct __GBBIOSROM {
     bool (*install)(struct __GBBIOSROM *this, GBGameboy *gameboy);
 
+    void (*write)(struct __GBBIOSROM *this, UInt16 address, UInt8 byte);
+    UInt8 (*read)(struct __GBBIOSROM *this, UInt16 address);
+
+    UInt16 start;
+    UInt16 end;
+
     bool masked;
     GBBIOSMaskPort *port;
     UInt8 data[kGBBIOSROMSize];
@@ -34,5 +40,8 @@ GBBIOSROM *GBBIOSROMCreate(UInt8 data[kGBBIOSROMSize]);
 void GBBIOSROMDestroy(GBBIOSROM *this);
 
 bool __GBBIOSROMOnInstall(GBBIOSROM *this, GBGameboy *gameboy);
+
+void __GBBIOSROMWrite(GBBIOSROM *this, UInt16 address, UInt8 byte);
+UInt8 __GBBIOSROMRead(GBBIOSROM *this, UInt16 address);
 
 #endif /* __gameboy_bios__ */

@@ -11,6 +11,7 @@
 #include "mmu.h"
 #include "lcd.h"
 #include "wram.h"
+#include "clock.h"
 
 // 0xFF00 --> input status
 //
@@ -25,12 +26,21 @@ struct __GBGameboy {
     GBProcessor *cpu;
     GBIOMapper *mmio;
     GBWorkRAM *wram;
+    GBClock *clock;
 
     GBCartridge *cart;
     bool cartInstalled;
+
+    GBBIOSROM *bios;
+    bool biosInstalled;
 };
 
+GBGameboy *GBGameboyCreate(void);
+void GBGameboyInstallBIOS(GBGameboy *this, GBBIOSROM *bios);
+void GBGameboyPowerOn(GBGameboy *this);
 
+bool GBGameboyInsertCartridge(GBCartridge *cart);
+bool GBGameboyEjectCartridge(GBCartridge *cart);
 
 #endif /* __gameboy__ */
 

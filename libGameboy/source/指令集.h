@@ -56,11 +56,6 @@ static __attribute__((always_inline)) void __GBProcessorReadArgument(GBProcessor
     __GBProcessorRead(cpu, cpu->state.pc++);
 }
 
-static __attribute__((always_inline)) void __GBProcessorStall(GBProcessor *cpu, UInt8 memCycles)
-{
-    // TODO: this.
-}
-
 #pragma mark - ALU
 
 static __attribute__((always_inline)) void __ALUAdd8(GBProcessor *cpu, UInt8 *to, UInt8 *from, UInt8 carry)
@@ -83,9 +78,6 @@ static __attribute__((always_inline)) void __ALUAdd16(GBProcessor *cpu, UInt16 *
     // Perform two 8-bit adds (four 4-bit adds). Flags should automatically be right.
     __ALUAdd8(cpu, (UInt8 *)(to) + 0, (UInt8 *)(from) + 0, carry);
     __ALUAdd8(cpu, (UInt8 *)(to) + 1, (UInt8 *)(from) + 1, cpu->state.f.c);
-
-    // 16 bit ALU operations stall for a single memory access
-    __GBProcessorStall(cpu, 1);
 }
 
 static __attribute__((always_inline)) void __ALUSub8(GBProcessor *cpu, SInt8 *to, SInt8 *from, UInt8 carry)
@@ -101,25 +93,52 @@ static __attribute__((always_inline)) void __ALUSub8(GBProcessor *cpu, SInt8 *to
     (*to) = result;
 }
 
-// TODO: Flags on logical operations
+static __attribute__((always_inline)) UInt16 __ALUSignExtend(UInt8 value)
+{
+    if (value >> 7) {
+        return 0xFF00 | value;
+    } else {
+        return 0x0000 | value;
+    }
+}
+
 static __attribute__((always_inline)) void __ALUAnd8(GBProcessor *cpu, UInt8 *to, UInt8 *from)
 {
     *to = *to & *from;
+
+    cpu->state.f.z = !(*to);
+    cpu->state.f.n = 0;
+    cpu->state.f.h = 1;
+    cpu->state.f.c = 0;
 }
 
 static __attribute__((always_inline)) void __ALUXor8(GBProcessor *cpu, UInt8 *to, UInt8 *from)
 {
     *to = *to ^ *from;
+
+    cpu->state.f.z = !(*to);
+    cpu->state.f.n = 0;
+    cpu->state.f.h = 0;
+    cpu->state.f.c = 0;
 }
 
 static __attribute__((always_inline)) void __ALUOr8(GBProcessor *cpu, UInt8 *to, UInt8 *from)
 {
     *to = *to | *from;
+
+    cpu->state.f.z = !(*to);
+    cpu->state.f.n = 0;
+    cpu->state.f.h = 0;
+    cpu->state.f.c = 0;
 }
 
 static __attribute__((always_inline)) void __ALUCP8(GBProcessor *cpu, UInt8 *to, UInt8 *from)
 {
-    // TODO: Implement this
+    UInt8 initial = *to;
+
+    __ALUSub8(cpu, (SInt8 *)to, (SInt8 *)from, 0);
+
+    *to = initial;
 }
 
 static __attribute__((always_inline)) void __ALURotateRight(UInt8 *reg, UInt8 amount)
@@ -147,260 +166,333 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
 
 #pragma mark - Argument Wrappers
 
-#define op_simple(code, str, impl)                                      \
-    op(code, 1, str, {                                                  \
-        impl;                                                           \
-                                                                        \
-        cpu->state.mode = kGBProcessorModeFetch;                        \
+#define op_simple(code, str, impl)                                          \
+    op(code, 1, str, {                                                      \
+        impl;                                                               \
+                                                                            \
+        cpu->state.mode = kGBProcessorModeFetch;                            \
     })
 
-#define op_wait(code, len, str, pre, post)                              \
-    op(code, len, str, {                                                \
-        if (cpu->state.mode == kGBProcessorModeRun) {                   \
-            pre;                                                        \
-                                                                        \
-            cpu->state.mode = kGBProcessorModeWait1;                    \
-        } else if (cpu->state.mode == kGBProcessorModeWait1) {          \
-            if (cpu->state.accessed)                                    \
-            {                                                           \
-                post;                                                   \
-                                                                        \
-                cpu->state.mode = kGBProcessorModeFetch;                \
-            }                                                           \
-        }                                                               \
+#define op_stall(code, len, str, impl)                                      \
+    op(code, len, str, {                                                    \
+        if (cpu->state.mode == kGBProcessorModeRun) {                       \
+            impl;                                                           \
+                                                                            \
+            __GBProcessorRead(cpu, 0x0000);                                 \
+                                                                            \
+            cpu->state.mode = kGBProcessorModeStalled;                      \
+        } else if (cpu->state.mode == kGBProcessorModeStalled) {            \
+            if (cpu->state.accessed)                                        \
+                cpu->state.mode = kGBProcessorModeFetch;                    \
+        }                                                                   \
     })
 
-#define op_wait2(code, len, str, pre, mid, post)                        \
-    op(code, len, str, {                                                \
-        if (cpu->state.mode == kGBProcessorModeRun) {                   \
-            pre;                                                        \
-                                                                        \
-            cpu->state.mode = kGBProcessorModeWait1;                    \
-        } else if (cpu->state.mode == kGBProcessorModeWait1) {          \
-            if (cpu->state.accessed)                                    \
-            {                                                           \
-                mid;                                                    \
-                                                                        \
-                cpu->state.mode = kGBProcessorModeWait2;                \
-            }                                                           \
-        } else if (cpu->state.mode == kGBProcessorModeWait2) {          \
-            if (cpu->state.accessed)                                    \
-            {                                                           \
-                post;                                                   \
-                                                                        \
-                cpu->state.mode = kGBProcessorModeFetch;                \
-            }                                                           \
-        }                                                               \
+#define op_wait(code, len, str, pre, post)                                  \
+    op(code, len, str, {                                                    \
+        if (cpu->state.mode == kGBProcessorModeRun) {                       \
+            pre;                                                            \
+                                                                            \
+            cpu->state.mode = kGBProcessorModeWait1;                        \
+        } else if (cpu->state.mode == kGBProcessorModeWait1) {              \
+            if (cpu->state.accessed)                                        \
+            {                                                               \
+                post;                                                       \
+                                                                            \
+                cpu->state.mode = kGBProcessorModeFetch;                    \
+            }                                                               \
+        }                                                                   \
     })
 
-#define op_stall(code, len, str, impl)                                  \
-    op(code, len, str, {                                                \
-        if (cpu->state.mode == kGBProcessorModeRun) {                   \
-            impl;                                                       \
-                                                                        \
-            cpu->state.mode = kGBProcessorModeStalled;                  \
-        } else if (cpu->state.mode == kGBProcessorModeStalled) {        \
-            if (cpu->state.accessed)                                    \
-                cpu->state.mode = kGBProcessorModeFetch;                \
-        }                                                               \
+#define op_wait_stall(code, len, str, pre, post)                            \
+    op(code, len, str, {                                                    \
+        if (cpu->state.mode == kGBProcessorModeRun) {                       \
+            pre;                                                            \
+                                                                            \
+            cpu->state.mode = kGBProcessorModeWait1;                        \
+        } else if (cpu->state.mode == kGBProcessorModeWait1) {              \
+            if (cpu->state.accessed)                                        \
+            {                                                               \
+                post;                                                       \
+                                                                            \
+                __GBProcessorRead(cpu, 0x0000);                             \
+                                                                            \
+                cpu->state.mode = kGBProcessorModeStalled;                  \
+            }                                                               \
+        } else if (cpu->state.mode == kGBProcessorModeStalled) {            \
+            if (cpu->state.accessed)                                        \
+                cpu->state.mode = kGBProcessorModeFetch;                    \
+        }                                                                   \
     })
 
-#define op_hl(code, str, impl)                                          \
-    op_wait(code, 1, str, {                                             \
-        __GBProcessorRead(cpu, cpu->state.hl);                          \
+#define op_wait2(code, len, str, pre, mid, post)                            \
+    op(code, len, str, {                                                    \
+        if (cpu->state.mode == kGBProcessorModeRun) {                       \
+            pre;                                                            \
+                                                                            \
+            cpu->state.mode = kGBProcessorModeWait1;                        \
+        } else if (cpu->state.mode == kGBProcessorModeWait1) {              \
+            if (cpu->state.accessed)                                        \
+            {                                                               \
+                mid;                                                        \
+                                                                            \
+                cpu->state.mode = kGBProcessorModeWait2;                    \
+            }                                                               \
+        } else if (cpu->state.mode == kGBProcessorModeWait2) {              \
+            if (cpu->state.accessed)                                        \
+            {                                                               \
+                post;                                                       \
+                                                                            \
+                cpu->state.mode = kGBProcessorModeFetch;                    \
+            }                                                               \
+        }                                                                   \
+    })
+
+#define op_wait2_stall(code, len, str, pre, mid, post)                      \
+    op(code, len, str, {                                                    \
+        if (cpu->state.mode == kGBProcessorModeRun) {                       \
+            pre;                                                            \
+                                                                            \
+            cpu->state.mode = kGBProcessorModeWait1;                        \
+        } else if (cpu->state.mode == kGBProcessorModeWait1) {              \
+            if (cpu->state.accessed)                                        \
+            {                                                               \
+                mid;                                                        \
+                                                                            \
+                cpu->state.mode = kGBProcessorModeWait2;                    \
+            }                                                               \
+        } else if (cpu->state.mode == kGBProcessorModeWait2) {              \
+            if (cpu->state.accessed)                                        \
+            {                                                               \
+                post;                                                       \
+                                                                            \
+                __GBProcessorRead(cpu, 0x0000);                             \
+                                                                            \
+                cpu->state.mode = kGBProcessorModeStalled;                  \
+            }                                                               \
+        } else if (cpu->state.mode == kGBProcessorModeStalled) {            \
+            if (cpu->state.accessed)                                        \
+                cpu->state.mode = kGBProcessorModeFetch;                    \
+        }                                                                   \
+    })
+
+#define op_wait3(code, len, str, pre, mid1, mid2, post)                     \
+    op(code, len, str, {                                                    \
+        if (cpu->state.mode == kGBProcessorModeRun) {                       \
+            pre;                                                            \
+                                                                            \
+            cpu->state.mode = kGBProcessorModeWait1;                        \
+        } else if (cpu->state.mode == kGBProcessorModeWait1) {              \
+            if (cpu->state.accessed)                                        \
+            {                                                               \
+                mid1;                                                       \
+                                                                            \
+                cpu->state.mode = kGBProcessorModeWait2;                    \
+            }                                                               \
+        } else if (cpu->state.mode == kGBProcessorModeWait2) {              \
+            if (cpu->state.accessed)                                        \
+            {                                                               \
+                mid2;                                                       \
+                                                                            \
+                cpu->state.mode = kGBProcessorModeWait3;                    \
+            }                                                               \
+        } else if (cpu->state.mode == kGBProcessorModeWait3) {              \
+            if (cpu->state.accessed)                                        \
+            {                                                               \
+                post;                                                       \
+                                                                            \
+                cpu->state.mode = kGBProcessorModeFetch;                    \
+            }                                                               \
+        }                                                                   \
+    })
+
+#define op_wait3_stall(code, len, str, pre, mid1, mid2, post)               \
+    op(code, len, str, {                                                    \
+        if (cpu->state.mode == kGBProcessorModeRun) {                       \
+            pre;                                                            \
+                                                                            \
+            cpu->state.mode = kGBProcessorModeWait1;                        \
+        } else if (cpu->state.mode == kGBProcessorModeWait1) {              \
+            if (cpu->state.accessed)                                        \
+            {                                                               \
+                mid1;                                                       \
+                                                                            \
+                cpu->state.mode = kGBProcessorModeWait2;                    \
+            }                                                               \
+        } else if (cpu->state.mode == kGBProcessorModeWait2) {              \
+            if (cpu->state.accessed)                                        \
+            {                                                               \
+                mid2;                                                       \
+                                                                            \
+                cpu->state.mode = kGBProcessorModeWait3;                    \
+            }                                                               \
+        } else if (cpu->state.mode == kGBProcessorModeWait3) {              \
+            if (cpu->state.accessed)                                        \
+            {                                                               \
+                post;                                                       \
+                                                                            \
+                __GBProcessorRead(cpu, 0x0000);                             \
+                                                                            \
+                cpu->state.mode = kGBProcessorModeStalled;                  \
+            }                                                               \
+        } else if (cpu->state.mode == kGBProcessorModeStalled) {            \
+            if (cpu->state.accessed)                                        \
+                cpu->state.mode = kGBProcessorModeFetch;                    \
+        }                                                                   \
+    })
+
+#define op_hl(code, str, impl)                                              \
+    op_wait(code, 1, str, {                                                 \
+        __GBProcessorRead(cpu, cpu->state.hl);                              \
     }, impl)
 
-#define op_arg(code, str, impl)                                         \
-    op_wait(code, 2, str, {                                             \
-        __GBProcessorReadArgument(cpu);                                 \
+#define op_arg(code, str, impl)                                             \
+    op_wait(code, 2, str, {                                                 \
+        __GBProcessorReadArgument(cpu);                                     \
     }, impl)
 
-#define op_arg16(code, str, intr, impl)                                 \
-    op(code, 3, str, {                                                  \
-        if (cpu->state.mode == kGBProcessorModeRun) {                   \
-            __GBProcessorReadArgument(cpu);                             \
-                                                                        \
-            cpu->state.mode = kGBProcessorModeWait1;                    \
-        } else if (cpu->state.mode == kGBProcessorModeWait1) {          \
-            if (cpu->state.accessed)                                    \
-            {                                                           \
-                intr;                                                   \
-                                                                        \
-                __GBProcessorReadArgument(cpu);                         \
-                                                                        \
-                cpu->state.mode = kGBProcessorModeWait2;                \
-            }                                                           \
-        } else if (cpu->state.mode == kGBProcessorModeWait2) {          \
-            if (cpu->state.accessed)                                    \
-            {                                                           \
-                impl;                                                   \
-                                                                        \
-                cpu->state.mode = kGBProcessorModeFetch;                \
-            }                                                           \
-        }                                                               \
+#define op_arg16(code, str, intr, impl)                                     \
+    op_wait2(code, 3, str, {                                                \
+        __GBProcessorReadArgument(cpu);                                     \
+    }, {                                                                    \
+        intr;                                                               \
+                                                                            \
+        __GBProcessorReadArgument(cpu);                                     \
+    }, impl)
+
+#define op_pre_simple(code, str, impl)                                      \
+    op_pre(code, 1, str, {                                                  \
+        impl;                                                               \
+                                                                            \
+        cpu->state.mode = kGBProcessorModeFetch;                            \
+    })
+
+#define op_pre_hl(code, str, impl)                                          \
+    op_pre(code, 1, str, {                                                  \
+        if (cpu->state.mode == kGBProcessorModeRun) {                       \
+            __GBProcessorRead(cpu, cpu->state.hl);                          \
+                                                                            \
+            cpu->state.mode = kGBProcessorModeWait1;                        \
+        } else if (cpu->state.mode == kGBProcessorModeWait1) {              \
+            if (cpu->state.accessed)                                        \
+            {                                                               \
+                impl;                                                       \
+                                                                            \
+                __GBProcessorWrite(cpu, cpu->state.hl, cpu->state.mdr);     \
+                                                                            \
+                cpu->state.mode = kGBProcessorModeWait2;                    \
+            }                                                               \
+        } else if (cpu->state.mode == kGBProcessorModeWait2) {              \
+            if (cpu->state.accessed)                                        \
+                cpu->state.mode = kGBProcessorModeFetch;                    \
+        }                                                                   \
     })
 
 #pragma mark - Load Macros
 
-#define ld_r(code, dst, src)                                            \
-    op_simple(code, "ld " #dst ", " #src, {                             \
-        cpu->state.dst = cpu->state.src;                                \
+#define ld_r(code, dst, src)                                                \
+    op_simple(code, "ld " #dst ", " #src, {                                 \
+        cpu->state.dst = cpu->state.src;                                    \
     })
 
 
-#define ld_rr(code, regs)                                               \
-    op_arg16(code, "ld " #regs ", " d16, {                              \
-        cpu->state.regs = cpu->state.mdr;                               \
-    }, {                                                                \
-        cpu->state.regs |= cpu->state.mdr << 8;                         \
+#define ld_rr(code, regs)                                                   \
+    op_arg16(code, "ld " #regs ", " d16, {                                  \
+        cpu->state.regs = cpu->state.mdr;                                   \
+    }, {                                                                    \
+        cpu->state.regs |= cpu->state.mdr << 8;                             \
     })
 
-#define ld_a_rr(code, regs)                                             \
-op_wait(code, 1, "ld a, (" #regs ")", {                                 \
-    __GBProcessorRead(cpu, cpu->state.regs);                            \
-}, {                                                                    \
-    cpu->state.a = cpu->state.mdr;                                      \
-})
-
-#define ld_rr_a(code, regs)                                             \
-    op_wait(code, 1, "ld (" #regs "), a", {                             \
-        __GBProcessorWrite(cpu, cpu->state.regs, cpu->state.a);         \
-    }, {                                                                \
-        /* nothing */                                                   \
+#define ld_a_rr(code, regs)                                                 \
+    op_wait(code, 1, "ld a, (" #regs ")", {                                 \
+        __GBProcessorRead(cpu, cpu->state.regs);                            \
+    }, {                                                                    \
+        cpu->state.a = cpu->state.mdr;                                      \
     })
 
+#define ld_rr_a(code, regs)                                                 \
+    op_wait(code, 1, "ld (" #regs "), a", {                                 \
+        __GBProcessorWrite(cpu, cpu->state.regs, cpu->state.a);             \
+    }, {                                                                    \
+        /* nothing */                                                       \
+    })
 
+#define ld_m(code, reg)                                                     \
+    op_arg(code, "ld " #reg ", " d8, {                                      \
+        cpu->state.reg = cpu->state.mdr;                                    \
+    })
 
-#define ld_m(code, reg)                                                 \
-op(code, 2, "ld " #reg ", " d8, {                                   \
-if (cpu->state.mode == kGBProcessorModeRun) {                   \
-__GBProcessorReadArgument(cpu);                             \
-\
-cpu->state.mode = kGBProcessorModeWait1;                    \
-} else if (cpu->state.mode == kGBProcessorModeWait1) {          \
-if (cpu->state.accessed)                                    \
-{                                                           \
-cpu->state.reg = cpu->state.mdr;                        \
-cpu->state.mode = kGBProcessorModeFetch;                \
-}                                                           \
-}                                                               \
-})
+#define ld_hl(code, reg)                                                    \
+    op_wait(code, 1, "ld (hl), " #reg, {                                    \
+        __GBProcessorWrite(cpu, cpu->state.hl, cpu->state.reg);             \
+    }, {                                                                    \
+        /* nothing */                                                       \
+    })
 
-#define ld_hl(code, reg)                                                \
-op(code, 1, "ld (hl), " #reg, {                                     \
-if (cpu->state.mode == kGBProcessorModeRun) {                   \
-__GBProcessorWrite(cpu, cpu->state.hl, cpu->state.reg);     \
-\
-cpu->state.mode = kGBProcessorModeWait1;                    \
-} else if (cpu->state.mode == kGBProcessorModeWait1) {          \
-if (cpu->state.accessed)                                    \
-cpu->state.mode = kGBProcessorModeFetch;                \
-}                                                               \
-})
+#define ld_r_hl(code, reg)                                                  \
+    op_hl(code, "ld " #reg ", (hl)", {                                      \
+        cpu->state.reg = cpu->state.mdr;                                    \
+    })
 
-#define ld_r_hl(code, reg)                                              \
-op(code, 1, "ld " #reg ", (hl)", {                                  \
-if (cpu->state.mode == kGBProcessorModeRun) {                   \
-__GBProcessorRead(cpu, cpu->state.hl);                      \
-\
-cpu->state.mode = kGBProcessorModeWait1;                    \
-} else if (cpu->state.mode == kGBProcessorModeWait1) {          \
-if (cpu->state.accessed)                                    \
-{                                                           \
-cpu->state.reg = cpu->state.mdr;                        \
-\
-cpu->state.mode = kGBProcessorModeFetch;                \
-}                                                           \
-}                                                               \
-})
-
-#pragma mark - Control flow instructions
+#pragma mark - Control flow macros
 
 // TODO: Implement these
-#define jr(code, str, cond)                                             \
-    op(code, 2, "jr " str d8, {                                         \
-        /* */                                                           \
-    })                                                                  \
-
-#define jmp(code, str, cond)                                            \
-    op(code, 3, "jp " str d16, {                                        \
-        /* */                                                           \
+#define jr(code, str, cond)                                                 \
+    op_wait_stall(code, 2, "jr " str d8, {                                  \
+        __GBProcessorReadArgument(cpu);                                     \
+    }, {                                                                    \
+        if (!cond)                                                          \
+        {                                                                   \
+            cpu->state.mode = kGBProcessorModeFetch;                        \
+                                                                            \
+            return;                                                         \
+        }                                                                   \
+                                                                            \
+        cpu->state.pc += __ALUSignExtend(cpu->state.mdr);                   \
     })
 
-#define call(code, str, cond)                                           \
-    op(code, 3, "call " str d16, {                                      \
-        /* */                                                           \
+#define jmp(code, str, cond)                                                \
+    op(code, 3, "jp " str d16, {                                            \
+        /* */                                                               \
     })
 
-#define ret(code, str, cond)                                            \
-    op(code, 1, "ret " str, {                                           \
-        /* */                                                           \
+#define call(code, str, cond)                                               \
+    op(code, 3, "call " str d16, {                                          \
+        /* */                                                               \
     })
 
-#define rst(code, dst)                                                  \
-    op(code, 1, "rst $" #dst, {                                         \
-        /* */                                                           \
+#define ret(code, str, cond)                                                \
+    op(code, 1, "ret " str, {                                               \
+        /* */                                                               \
     })
 
-#pragma mark - Stack Manipulation Instructions
-
-#define pop(code, regs)                                                                 \
-    op(code, 1, "pop " #regs, {                                                         \
-        if (cpu->state.mode == kGBProcessorModeRun) {                                   \
-            __GBProcessorRead(cpu, cpu->state.sp++);                                    \
-                                                                                        \
-            cpu->state.mode = kGBProcessorModeWait1;                                    \
-        } else if (cpu->state.mode == kGBProcessorModeWait1) {                          \
-            if (cpu->state.accessed)                                                    \
-            {                                                                           \
-                cpu->state.regs = cpu->state.mdr;                                       \
-                                                                                        \
-                __GBProcessorRead(cpu, cpu->state.sp++);                                \
-                                                                                        \
-                cpu->state.mode = kGBProcessorModeWait2;                                \
-            }                                                                           \
-        } else if (cpu->state.mode == kGBProcessorModeWait2) {                          \
-            if (cpu->state.accessed)                                                    \
-            {                                                                           \
-                cpu->state.regs |= cpu->state.mdr << 8;                                 \
-                                                                                        \
-                __GBProcessorRead(cpu, 0x0000);                                         \
-                                                                                        \
-                cpu->state.mode = kGBProcessorModeStalled;                              \
-            }                                                                           \
-        } else if (cpu->state.mode == kGBProcessorModeStalled) {                        \
-            if (cpu->state.accessed)                                                    \
-                cpu->state.mode = kGBProcessorModeFetch;                                \
-        }                                                                               \
+#define rst(code, dst)                                                      \
+    op(code, 1, "rst $" #dst, {                                             \
+        /* */                                                               \
     })
 
-#define push(code, regs)                                                                \
-    op(code, 1, "push " #regs, {                                                        \
-        if (cpu->state.mode == kGBProcessorModeRun) {                                   \
-            __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.regs >> 8);             \
-                                                                                        \
-        cpu->state.mode = kGBProcessorModeWait1;                                        \
-        } else if (cpu->state.mode == kGBProcessorModeWait1) {                          \
-            if (cpu->state.accessed)                                                    \
-            {                                                                           \
-                __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.regs & 0xFF);       \
-                                                                                        \
-                cpu->state.mode = kGBProcessorModeWait2;                                \
-            }                                                                           \
-        } else if (cpu->state.mode == kGBProcessorModeWait2) {                          \
-            if (cpu->state.accessed)                                                    \
-            {                                                                           \
-                __GBProcessorRead(cpu, 0x0000);                                         \
-                                                                                        \
-                cpu->state.mode = kGBProcessorModeStalled;                              \
-            }                                                                           \
-        } else if (cpu->state.mode == kGBProcessorModeStalled) {                        \
-            if (cpu->state.accessed)                                                    \
-                cpu->state.mode = kGBProcessorModeFetch;                                \
-        }                                                                               \
+#pragma mark - Stack manipulation macros
+
+#define pop(code, regs)                                                     \
+    op_wait2_stall(code, 1, "pop " #regs, {                                 \
+        __GBProcessorRead(cpu, cpu->state.sp++);                            \
+    }, {                                                                    \
+        cpu->state.regs = cpu->state.mdr;                                   \
+                                                                            \
+        __GBProcessorRead(cpu, cpu->state.sp++);                            \
+    }, {                                                                    \
+        cpu->state.regs |= cpu->state.mdr << 8;                             \
     })
 
-#pragma mark - Undefined Instructions
+#define push(code, regs)                                                    \
+    op_wait2_stall(code, 1, "push " #regs, {                                \
+        __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.regs >> 8);     \
+    }, {                                                                    \
+        __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.regs & 0xFF);   \
+    }, {                                                                    \
+        /* nothing */                                                       \
+    })
+
+#pragma mark - Undefined instruction macros
 
 #define udef(code)                                                                      \
     op(code, 1, "ud " #code, {                                                          \
@@ -410,76 +502,49 @@ cpu->state.mode = kGBProcessorModeFetch;                \
         cpu->state.mode = kGBProcessorModeOff;                                          \
     })
 
-#pragma mark - Logical Operations
+#pragma mark - Logical operation macros
 
-#define inc_r(code, reg)                                                \
-    op_simple(code, "inc " #reg, {                                      \
-        UInt8 carry = cpu->state.f.c;                                   \
-        UInt8 one = 1;                                                  \
-                                                                        \
-        __ALUAdd8(cpu, &cpu->state.reg, &one, 0);                       \
-        cpu->state.f.c = carry;                                         \
+#define inc_r(code, reg)                                                    \
+    op_simple(code, "inc " #reg, {                                          \
+        UInt8 carry = cpu->state.f.c;                                       \
+        UInt8 one = 1;                                                      \
+                                                                            \
+        __ALUAdd8(cpu, &cpu->state.reg, &one, 0);                           \
+        cpu->state.f.c = carry;                                             \
     })
 
-#define dec_r(code, reg)                                                \
-    op_simple(code, "inc " #reg, {                                      \
-        UInt8 carry = cpu->state.f.c;                                   \
-        SInt8 one = 1;                                                  \
-                                                                        \
-        __ALUSub8(cpu, (SInt8 *)&cpu->state.reg, &one, 0);              \
-        cpu->state.f.c = carry;                                         \
+#define dec_r(code, reg)                                                    \
+    op_simple(code, "inc " #reg, {                                          \
+        UInt8 carry = cpu->state.f.c;                                       \
+        SInt8 one = 1;                                                      \
+                                                                            \
+        __ALUSub8(cpu, (SInt8 *)&cpu->state.reg, &one, 0);                  \
+        cpu->state.f.c = carry;                                             \
     })
 
-#define inc_rr(code, regs)                                              \
-    op(code, 1, "inc " #regs, {                                         \
-        if (cpu->state.mode == kGBProcessorModeRun) {                   \
-            cpu->state.regs++;                                          \
-                                                                        \
-            /* Read something. I don't care what */                     \
-            __GBProcessorRead(cpu, 0x0000);                             \
-                                                                        \
-            cpu->state.mode = kGBProcessorModeStalled;                  \
-        } else if (cpu->state.mode == kGBProcessorModeStalled) {        \
-            if (cpu->state.accessed)                                    \
-                cpu->state.mode = kGBProcessorModeFetch;                \
-        }                                                               \
+#define inc_rr(code, regs)                                                  \
+    op_stall(code, 1, "inc " #regs, {                                       \
+            cpu->state.regs++;                                              \
     })
 
-#define dec_rr(code, regs)                                              \
-    op(code, 1, "dec " #regs, {                                         \
-        if (cpu->state.mode == kGBProcessorModeRun) {                   \
-            cpu->state.regs--;                                          \
-                                                                        \
-            /* Read something. I don't care what */                     \
-            __GBProcessorRead(cpu, 0x0000);                             \
-                                                                        \
-            cpu->state.mode = kGBProcessorModeStalled;                  \
-        } else if (cpu->state.mode == kGBProcessorModeStalled) {        \
-            if (cpu->state.accessed)                                    \
-                cpu->state.mode = kGBProcessorModeFetch;                \
-        }                                                               \
+#define dec_rr(code, regs)                                                  \
+    op_stall(code, 1, "dec " #regs, {                                       \
+        cpu->state.regs--;                                                  \
     })
 
-#define add_hl(code, reg)                                               \
-    op(code, 1, "add hl, " #reg, {                                      \
-        if (cpu->state.mode == kGBProcessorModeRun) {                   \
-            UInt8 zero = cpu->state.f.z;                                \
-                                                                        \
-            __ALUAdd16(cpu, &cpu->state.hl, &cpu->state.reg, 0);        \
-            __GBProcessorRead(cpu, 0x0000);                             \
-                                                                        \
-            cpu->state.f.z = zero;                                      \
-            cpu->state.mode = kGBProcessorModeStalled;                  \
-        } else if (cpu->state.mode == kGBProcessorModeStalled) {        \
-            if (cpu->state.accessed)                                    \
-                cpu->state.mode = kGBProcessorModeFetch;                \
-        }                                                               \
+#define add_hl(code, reg)                                                   \
+    op_stall(code, 1, "add hl, " #reg, {                                    \
+        UInt8 zero = cpu->state.f.z;                                        \
+                                                                            \
+        __ALUAdd16(cpu, &cpu->state.hl, &cpu->state.reg, 0);                \
+                                                                            \
+        cpu->state.f.z = zero;                                              \
     })
 
-#define math_op(code, name, reg, func, c)                               \
-    op_simple(code, name " a, " #reg, {                                 \
-        func(cpu, (void *)&cpu->state.a, (void *)&cpu->state.reg, c);   \
-    })                                                                  \
+#define math_op(code, name, reg, func, c)                                   \
+    op_simple(code, name " a, " #reg, {                                     \
+        func(cpu, (void *)&cpu->state.a, (void *)&cpu->state.reg, c);       \
+    })
 
 #define add(code, reg) math_op(code, "add", reg, __ALUAdd8, 0)
 
@@ -489,19 +554,19 @@ cpu->state.mode = kGBProcessorModeFetch;                \
 
 #define sbc(code, reg) math_op(code, "sbc", reg, __ALUSub8, cpu->state.f.c)
 
-#define alu_op(code, name, reg, func)                                   \
-    op_simple(code, name " " #reg, {                                    \
-        func(cpu, &cpu->state.a, &cpu->state.reg);                      \
+#define alu_op(code, name, reg, func)                                       \
+    op_simple(code, name " " #reg, {                                        \
+        func(cpu, &cpu->state.a, &cpu->state.reg);                          \
     })
 
-#define alu_op_hl(code, name, func)                                     \
-    op_hl(code, name " (hl)", {                                         \
-        func(cpu, &cpu->state.a, &cpu->state.mdr);                      \
+#define alu_op_hl(code, name, func)                                         \
+    op_hl(code, name " (hl)", {                                             \
+        func(cpu, &cpu->state.a, &cpu->state.mdr);                          \
     })
 
-#define alu_op_arg(code, name, func)                                    \
-    op_arg(code, name " " d8, {                                         \
-        func(cpu, &cpu->state.a, &cpu->state.mdr);                      \
+#define alu_op_arg(code, name, func)                                        \
+    op_arg(code, name " " d8, {                                             \
+        func(cpu, &cpu->state.a, &cpu->state.mdr);                          \
     })
 
 #define and(code, reg) alu_op(code, "and", reg, __ALUAnd8)
@@ -510,7 +575,7 @@ cpu->state.mode = kGBProcessorModeFetch;                \
 
 #define or(code, reg) alu_op(code, "or", reg, __ALUOr8)
 
-#define cp(code, reg) alu_op(code, "cp", reg, __ALUCP8)
+#define cmp(code, reg) alu_op(code, "cp", reg, __ALUCP8)
 
 #pragma mark - Instruction Implementation
 
@@ -933,16 +998,16 @@ alu_op_hl(0xB6, "or", __ALUOr8);
 
 or(0xB7, a);
 
-cp(0xB8, b);
-cp(0xB9, c);
-cp(0xBA, d);
-cp(0xBB, e);
-cp(0xBC, h);
-cp(0xBD, l);
+cmp(0xB8, b);
+cmp(0xB9, c);
+cmp(0xBA, d);
+cmp(0xBB, e);
+cmp(0xBC, h);
+cmp(0xBD, l);
 
 alu_op_hl(0xBE, "cp", __ALUCP8);
 
-cp(0xBF, a);
+cmp(0xBF, a);
 
 ret(0xC0, "nz", !cpu->state.f.z);
 
@@ -960,8 +1025,14 @@ op_arg(0xC6, "add a, " d8, {
 rst(0xC7, 0x00);
 ret(0xC8, "z", cpu->state.f.z);
 
-op(0xC9, 1, "ret", {
-    //
+op_wait2_stall(0xC9, 1, "ret", {
+    __GBProcessorRead(cpu, cpu->state.sp++);
+}, {
+    cpu->state.pc = cpu->state.mdr;
+
+    __GBProcessorRead(cpu, cpu->state.sp++);
+}, {
+    cpu->state.pc |= (cpu->state.mdr << 8);
 });
 
 jmp(0xCA, "z, ", cpu->state.f.z);
@@ -990,8 +1061,15 @@ op_arg(0xD6, "sub " d8, {
 rst(0xD7, 0x10);
 ret(0xD8, "c", cpu->state.f.c);
 
-op(0xD9, 1, "reti", {
-    //
+op_wait2_stall(0xD9, 1, "reti", {
+    __GBProcessorRead(cpu, cpu->state.sp++);
+}, {
+    cpu->state.pc = cpu->state.mdr;
+
+    __GBProcessorRead(cpu, cpu->state.sp++);
+}, {
+    cpu->state.pc |= (cpu->state.mdr << 8);
+    cpu->state.ime = true;
 });
 
 jmp(0xDA, "c, ", cpu->state.f.c);
@@ -1006,14 +1084,20 @@ op_arg(0xDE, "sbc " d8, {
 
 rst(0xDF, 0x18);
 
-op(0xE0, 2, "ld " d8 "(" dIO "), a", {
-    //
+op_wait2(0xE0, 2, "ld " d8 "(" dIO "), a", {
+    __GBProcessorReadArgument(cpu);
+}, {
+    __GBProcessorWrite(cpu, 0xFF00 + cpu->state.mdr, cpu->state.a);
+}, {
+    // We're done
 });
 
 pop(0xE1, hl);
 
-op(0xE2, 1, "ld c(" dIO "), a", {
-    //
+op_wait(0xE2, 1, "ld c(" dIO "), a", {
+    __GBProcessorWrite(cpu, 0xFF00 + cpu->state.c, cpu->state.a);
+}, {
+    // We're done
 });
 
 udef(0xE3);
@@ -1024,18 +1108,34 @@ alu_op_arg(0xE6, "and", __ALUAnd8);
 
 rst(0xE7, 0x20);
 
-op(0xE8, 2, "add sp, " d8, {
-    //
+op_wait3_stall(0xE8, 1, "add sp, " d8, {
+    __GBProcessorReadArgument(cpu);
+}, {
+    UInt16 v = __ALUSignExtend(cpu->state.mdr);
+
+    __ALUAdd16(cpu, &cpu->state.sp, &v, 0);
+}, {
+    __GBProcessorRead(cpu, 0x0000);
+
+    cpu->state.f.z = 0;
+}, {
+    // Stalling more...
 });
 
-op(0xE9, 1, "jp (hl)", {
+op_simple(0xE9, "jp (hl)", {
     cpu->state.pc = cpu->state.hl;
-
-    cpu->state.mode = kGBProcessorModeFetch;
 });
 
-op(0xEA, 3, "ld (" d16 "), a", {
-    //
+op_wait3(0xEA, 3, "ld (" d16 "), a", {
+    __GBProcessorReadArgument(cpu);
+}, {
+    cpu->state.data = cpu->state.mdr;
+
+    __GBProcessorReadArgument(cpu);
+}, {
+    __GBProcessorWrite(cpu, cpu->state.data || (cpu->state.mdr << 8), cpu->state.a);
+}, {
+    // That's it
 });
 
 udef(0xEB);
@@ -1046,16 +1146,28 @@ alu_op_arg(0xEE, "xor", __ALUXor8);
 
 rst(0xEF, 0x28);
 
-op(0xF0, 2, "ld a, " d8 "(" dIO ")", {
-    //
+op_wait2(0xF0, 2, "ld a, " d8 "(" dIO ")", {
+    __GBProcessorReadArgument(cpu);
+}, {
+    __GBProcessorRead(cpu, 0xFF00 + cpu->state.mdr);
+}, {
+    cpu->state.a = cpu->state.mdr;
 });
 
-op(0xF1, 1, "pop af", {
-    //
+op_wait2_stall(0xF1, 1, "pop af", {
+    __GBProcessorRead(cpu, cpu->state.sp++);
+}, {
+    cpu->state.f.reg = cpu->state.mdr;
+
+    __GBProcessorRead(cpu, cpu->state.sp++);
+}, {
+    cpu->state.a = cpu->state.mdr;
 });
 
-op(0xF2, 1, "ld a, c(" dIO ")", {
-    //
+op_wait(0xF2, 1, "ld a, c(" dIO ")", {
+    __GBProcessorRead(cpu, 0xFF00 + cpu->state.c);
+}, {
+    cpu->state.a = cpu->state.mdr;
 });
 
 op(0xF3, 1, "di", {
@@ -1066,24 +1178,47 @@ op(0xF3, 1, "di", {
 
 udef(0xF4);
 
-op(0xF5, 1, "push af", {
-    //
+op_wait2_stall(0xF5, 1, "push af", {
+    __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.a);
+}, {
+    __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.f.reg);
+}, {
+    // We're done
 });
 
 alu_op_arg(0xF6, "or", __ALUOr8);
 
 rst(0xF7, 0x30);
 
-op(0xF8, 2, "ld hl, " d8 "(sp)", {
-    //
+op_wait2_stall(0xF8, 2, "ld hl, " d8 "(sp)", {
+    __GBProcessorReadArgument(cpu);
+}, {
+    UInt16 v = __ALUSignExtend(cpu->state.mdr);
+    UInt16 sp = cpu->state.sp;
+
+    __ALUAdd16(cpu, &cpu->state.sp, &v, 0);
+
+    cpu->state.hl = cpu->state.sp;
+    cpu->state.sp = sp;
+    cpu->state.f.z = 0;
+}, {
+    // That's it
 });
 
 op_stall(0xF9, 1, "ld sp, hl", {
     cpu->state.sp = cpu->state.hl;
 });
 
-op(0xFA, 3, "ld a, (" d16 ")", {
-    //
+op_wait3(0xFA, 3, "ld a, (" d16 ")", {
+    __GBProcessorReadArgument(cpu);
+}, {
+    cpu->state.a = cpu->state.mdr;
+
+    __GBProcessorReadArgument(cpu);
+}, {
+    __GBProcessorRead(cpu, cpu->state.a || (cpu->state.mdr << 8));
+}, {
+    cpu->state.a = cpu->state.mdr;
 });
 
 op_simple(0xFB, "ei", {
@@ -1139,19 +1274,38 @@ rst(0xFF, 0x38);
         /* */                                   \
     })
 
-#define bit(code, pos, reg)                     \
-    op_pre(code, 1, "bit " #pos ", " #reg, {    \
-        /* */                                   \
+#define bit(code, pos, reg)                                 \
+    op_pre_simple(code, "bit " #pos ", " #reg, {            \
+        cpu->state.f.z = !((cpu->state.reg >> pos) & 1);    \
+        cpu->state.f.n = 0;                                 \
+        cpu->state.f.h = 1;                                 \
     })
 
-#define res(code, pos, reg)                     \
-    op_pre(code, 1, "res " #pos ", " #reg, {    \
-        /* */                                   \
+#define bit_hl(code, pos)                                   \
+    op_pre_hl(code, "bit " #pos ", (hl)", {                 \
+        cpu->state.f.z = !((cpu->state.mdr >> pos) & 1);    \
+        cpu->state.f.n = 0;                                 \
+        cpu->state.f.h = 1;                                 \
     })
 
-#define set(code, pos, reg)                     \
-    op_pre(code, 1, "set " #pos ", " #reg, {    \
-        /* */                                   \
+#define res(code, pos, reg)                                 \
+    op_pre_simple(code, "res " #pos ", " #reg, {            \
+        cpu->state.reg &= ~(1 << pos);                      \
+    })
+
+#define res_hl(code, pos)                                   \
+    op_pre_hl(code, "res " #pos ", (hl)", {                 \
+        cpu->state.mdr &= ~(1 << pos);                      \
+    })
+
+#define set(code, pos, reg)                                 \
+    op_pre_simple(code, "set " #pos ", " #reg, {            \
+        cpu->state.reg |= (1 << pos);                       \
+    })
+
+#define set_hl(code, pos)                                   \
+    op_pre_hl(code, "set " #pos ", (hl)", {                 \
+        cpu->state.mdr |= (1 << pos);                       \
     })
 
 rlc(0x00, b);    rlc(0x01, c);
@@ -1194,32 +1348,32 @@ srl(0x3A, d);    srl(0x3B, e);
 srl(0x3C, h);    srl(0x3D, l);
 srl(0x3E, (hl)); srl(0x3F, a);
 
-bit(0x40, 0, b); bit(0x41, 0, c); bit(0x42, 0, d); bit(0x43, 0, e); bit(0x44, 0, h); bit(0x45, 0, l); bit(0x46, 0, (hl)); bit(0x47, 0, a);
-bit(0x48, 1, b); bit(0x49, 1, c); bit(0x4A, 1, d); bit(0x4B, 1, e); bit(0x4C, 1, h); bit(0x4D, 1, l); bit(0x4E, 1, (hl)); bit(0x4F, 1, a);
-bit(0x50, 2, b); bit(0x51, 2, c); bit(0x52, 2, d); bit(0x53, 2, e); bit(0x54, 2, h); bit(0x55, 2, l); bit(0x56, 2, (hl)); bit(0x57, 2, a);
-bit(0x58, 3, b); bit(0x59, 3, c); bit(0x5A, 3, d); bit(0x5B, 3, e); bit(0x5C, 3, h); bit(0x5D, 3, l); bit(0x5E, 3, (hl)); bit(0x5F, 3, a);
-bit(0x60, 4, b); bit(0x61, 4, c); bit(0x62, 4, d); bit(0x63, 4, e); bit(0x64, 4, h); bit(0x65, 4, l); bit(0x66, 4, (hl)); bit(0x67, 4, a);
-bit(0x68, 5, b); bit(0x69, 5, c); bit(0x6A, 5, d); bit(0x6B, 5, e); bit(0x6C, 5, h); bit(0x6D, 5, l); bit(0x6E, 5, (hl)); bit(0x6F, 5, a);
-bit(0x70, 6, b); bit(0x71, 6, c); bit(0x72, 6, d); bit(0x73, 6, e); bit(0x74, 6, h); bit(0x75, 6, l); bit(0x76, 6, (hl)); bit(0x77, 6, a);
-bit(0x78, 7, b); bit(0x79, 7, c); bit(0x7A, 7, d); bit(0x7B, 7, e); bit(0x7C, 7, h); bit(0x7D, 7, l); bit(0x7E, 7, (hl)); bit(0x7F, 7, a);
+bit(0x40, 0, b); bit(0x41, 0, c); bit(0x42, 0, d); bit(0x43, 0, e); bit(0x44, 0, h); bit(0x45, 0, l); bit_hl(0x46, 0); bit(0x47, 0, a);
+bit(0x48, 1, b); bit(0x49, 1, c); bit(0x4A, 1, d); bit(0x4B, 1, e); bit(0x4C, 1, h); bit(0x4D, 1, l); bit_hl(0x4E, 1); bit(0x4F, 1, a);
+bit(0x50, 2, b); bit(0x51, 2, c); bit(0x52, 2, d); bit(0x53, 2, e); bit(0x54, 2, h); bit(0x55, 2, l); bit_hl(0x56, 2); bit(0x57, 2, a);
+bit(0x58, 3, b); bit(0x59, 3, c); bit(0x5A, 3, d); bit(0x5B, 3, e); bit(0x5C, 3, h); bit(0x5D, 3, l); bit_hl(0x5E, 3); bit(0x5F, 3, a);
+bit(0x60, 4, b); bit(0x61, 4, c); bit(0x62, 4, d); bit(0x63, 4, e); bit(0x64, 4, h); bit(0x65, 4, l); bit_hl(0x66, 4); bit(0x67, 4, a);
+bit(0x68, 5, b); bit(0x69, 5, c); bit(0x6A, 5, d); bit(0x6B, 5, e); bit(0x6C, 5, h); bit(0x6D, 5, l); bit_hl(0x6E, 5); bit(0x6F, 5, a);
+bit(0x70, 6, b); bit(0x71, 6, c); bit(0x72, 6, d); bit(0x73, 6, e); bit(0x74, 6, h); bit(0x75, 6, l); bit_hl(0x76, 6); bit(0x77, 6, a);
+bit(0x78, 7, b); bit(0x79, 7, c); bit(0x7A, 7, d); bit(0x7B, 7, e); bit(0x7C, 7, h); bit(0x7D, 7, l); bit_hl(0x7E, 7); bit(0x7F, 7, a);
 
-res(0x80, 0, b); res(0x81, 0, c); res(0x82, 0, d); res(0x83, 0, e); res(0x84, 0, h); res(0x85, 0, l); res(0x86, 0, (hl)); res(0x87, 0, a);
-res(0x88, 1, b); res(0x89, 1, c); res(0x8A, 1, d); res(0x8B, 1, e); res(0x8C, 1, h); res(0x8D, 1, l); res(0x8E, 1, (hl)); res(0x8F, 1, a);
-res(0x90, 2, b); res(0x91, 2, c); res(0x92, 2, d); res(0x93, 2, e); res(0x94, 2, h); res(0x95, 2, l); res(0x96, 2, (hl)); res(0x97, 2, a);
-res(0x98, 3, b); res(0x99, 3, c); res(0x9A, 3, d); res(0x9B, 3, e); res(0x9C, 3, h); res(0x9D, 3, l); res(0x9E, 3, (hl)); res(0x9F, 3, a);
-res(0xA0, 4, b); res(0xA1, 4, c); res(0xA2, 4, d); res(0xA3, 4, e); res(0xA4, 4, h); res(0xA5, 4, l); res(0xA6, 4, (hl)); res(0xA7, 4, a);
-res(0xA8, 5, b); res(0xA9, 5, c); res(0xAA, 5, d); res(0xAB, 5, e); res(0xAC, 5, h); res(0xAD, 5, l); res(0xAE, 5, (hl)); res(0xAF, 5, a);
-res(0xB0, 6, b); res(0xB1, 6, c); res(0xB2, 6, d); res(0xB3, 6, e); res(0xB4, 6, h); res(0xB5, 6, l); res(0xB6, 6, (hl)); res(0xB7, 6, a);
-res(0xB8, 7, b); res(0xB9, 7, c); res(0xBA, 7, d); res(0xBB, 7, e); res(0xBC, 7, h); res(0xBD, 7, l); res(0xBE, 7, (hl)); res(0xBF, 7, a);
+res(0x80, 0, b); res(0x81, 0, c); res(0x82, 0, d); res(0x83, 0, e); res(0x84, 0, h); res(0x85, 0, l); res_hl(0x86, 0); res(0x87, 0, a);
+res(0x88, 1, b); res(0x89, 1, c); res(0x8A, 1, d); res(0x8B, 1, e); res(0x8C, 1, h); res(0x8D, 1, l); res_hl(0x8E, 1); res(0x8F, 1, a);
+res(0x90, 2, b); res(0x91, 2, c); res(0x92, 2, d); res(0x93, 2, e); res(0x94, 2, h); res(0x95, 2, l); res_hl(0x96, 2); res(0x97, 2, a);
+res(0x98, 3, b); res(0x99, 3, c); res(0x9A, 3, d); res(0x9B, 3, e); res(0x9C, 3, h); res(0x9D, 3, l); res_hl(0x9E, 3); res(0x9F, 3, a);
+res(0xA0, 4, b); res(0xA1, 4, c); res(0xA2, 4, d); res(0xA3, 4, e); res(0xA4, 4, h); res(0xA5, 4, l); res_hl(0xA6, 4); res(0xA7, 4, a);
+res(0xA8, 5, b); res(0xA9, 5, c); res(0xAA, 5, d); res(0xAB, 5, e); res(0xAC, 5, h); res(0xAD, 5, l); res_hl(0xAE, 5); res(0xAF, 5, a);
+res(0xB0, 6, b); res(0xB1, 6, c); res(0xB2, 6, d); res(0xB3, 6, e); res(0xB4, 6, h); res(0xB5, 6, l); res_hl(0xB6, 6); res(0xB7, 6, a);
+res(0xB8, 7, b); res(0xB9, 7, c); res(0xBA, 7, d); res(0xBB, 7, e); res(0xBC, 7, h); res(0xBD, 7, l); res_hl(0xBE, 7); res(0xBF, 7, a);
 
-set(0xC0, 0, b); set(0xC1, 0, c); set(0xC2, 0, d); set(0xC3, 0, e); set(0xC4, 0, h); set(0xC5, 0, l); set(0xC6, 0, (hl)); set(0xC7, 0, a);
-set(0xC8, 1, b); set(0xC9, 1, c); set(0xCA, 1, d); set(0xCB, 1, e); set(0xCC, 1, h); set(0xCD, 1, l); set(0xCE, 1, (hl)); set(0xCF, 1, a);
-set(0xD0, 2, b); set(0xD1, 2, c); set(0xD2, 2, d); set(0xD3, 2, e); set(0xD4, 2, h); set(0xD5, 2, l); set(0xD6, 2, (hl)); set(0xD7, 2, a);
-set(0xD8, 3, b); set(0xD9, 3, c); set(0xDA, 3, d); set(0xDB, 3, e); set(0xDC, 3, h); set(0xDD, 3, l); set(0xDE, 3, (hl)); set(0xDF, 3, a);
-set(0xE0, 4, b); set(0xE1, 4, c); set(0xE2, 4, d); set(0xE3, 4, e); set(0xE4, 4, h); set(0xE5, 4, l); set(0xE6, 4, (hl)); set(0xE7, 4, a);
-set(0xE8, 5, b); set(0xE9, 5, c); set(0xEA, 5, d); set(0xEB, 5, e); set(0xEC, 5, h); set(0xED, 5, l); set(0xEE, 5, (hl)); set(0xEF, 5, a);
-set(0xF0, 6, b); set(0xF1, 6, c); set(0xF2, 6, d); set(0xF3, 6, e); set(0xF4, 6, h); set(0xF5, 6, l); set(0xF6, 6, (hl)); set(0xF7, 6, a);
-set(0xF8, 7, b); set(0xF9, 7, c); set(0xFA, 7, d); set(0xFB, 7, e); set(0xFC, 7, h); set(0xFD, 7, l); set(0xFE, 7, (hl)); set(0xFF, 7, a);
+set(0xC0, 0, b); set(0xC1, 0, c); set(0xC2, 0, d); set(0xC3, 0, e); set(0xC4, 0, h); set(0xC5, 0, l); set_hl(0xC6, 0); set(0xC7, 0, a);
+set(0xC8, 1, b); set(0xC9, 1, c); set(0xCA, 1, d); set(0xCB, 1, e); set(0xCC, 1, h); set(0xCD, 1, l); set_hl(0xCE, 1); set(0xCF, 1, a);
+set(0xD0, 2, b); set(0xD1, 2, c); set(0xD2, 2, d); set(0xD3, 2, e); set(0xD4, 2, h); set(0xD5, 2, l); set_hl(0xD6, 2); set(0xD7, 2, a);
+set(0xD8, 3, b); set(0xD9, 3, c); set(0xDA, 3, d); set(0xDB, 3, e); set(0xDC, 3, h); set(0xDD, 3, l); set_hl(0xDE, 3); set(0xDF, 3, a);
+set(0xE0, 4, b); set(0xE1, 4, c); set(0xE2, 4, d); set(0xE3, 4, e); set(0xE4, 4, h); set(0xE5, 4, l); set_hl(0xE6, 4); set(0xE7, 4, a);
+set(0xE8, 5, b); set(0xE9, 5, c); set(0xEA, 5, d); set(0xEB, 5, e); set(0xEC, 5, h); set(0xED, 5, l); set_hl(0xEE, 5); set(0xEF, 5, a);
+set(0xF0, 6, b); set(0xF1, 6, c); set(0xF2, 6, d); set(0xF3, 6, e); set(0xF4, 6, h); set(0xF5, 6, l); set_hl(0xF6, 6); set(0xF7, 6, a);
+set(0xF8, 7, b); set(0xF9, 7, c); set(0xFA, 7, d); set(0xFB, 7, e); set(0xFC, 7, h); set(0xFD, 7, l); set_hl(0xFE, 7); set(0xFF, 7, a);
 
 #undef bit
 #undef res
@@ -1243,14 +1397,14 @@ set(0xF8, 7, b); set(0xF9, 7, c); set(0xFA, 7, d); set(0xFB, 7, e); set(0xFC, 7,
     &op_ ## p ## v ## 8, &op_ ## p ## v ## 9, &op_ ## p ## v ## A, &op_ ## p ## v ## B,     \
     &op_ ## p ## v ## C, &op_ ## p ## v ## D, &op_ ## p ## v ## E, &op_ ## p ## v ## F
 
-const static GBProcessorOP *const gGBInstructionSetCB[0x100] = {
+const static GBProcessorOP *const gGBInstructionSet[0x100] = {
     expand(0, 0x), expand(1, 0x), expand(2, 0x), expand(3, 0x),
     expand(4, 0x), expand(5, 0x), expand(6, 0x), expand(7, 0x),
     expand(8, 0x), expand(9, 0x), expand(A, 0x), expand(B, 0x),
     expand(C, 0x), expand(D, 0x), expand(E, 0x), expand(F, 0x)
 };
 
-static const GBProcessorOP *gGBInstructionSet[0x100] = {
+static const GBProcessorOP *const gGBInstructionSetCB[0x100] = {
     expand(0x0, pre_),  expand(0x1, pre_), expand(0x2, pre_), expand(0x3, pre_),
     expand(0x4, pre_),  expand(0x5, pre_), expand(0x6, pre_), expand(0x7, pre_),
     expand(0x8, pre_),  expand(0x9, pre_), expand(0xA, pre_), expand(0xB, pre_),

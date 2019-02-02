@@ -15,14 +15,15 @@
 		8B3E99EB21F5342500FA2526 /* gameboy.h in Headers */ = {isa = PBXBuildFile; fileRef = 8B3E99EA21F5342400FA2526 /* gameboy.h */; };
 		8B3E99ED21F5343500FA2526 /* main.s in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99EC21F5343500FA2526 /* main.s */; };
 		8B3E99F721F5667B00FA2526 /* libEmulator.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B3E99E121F533C100FA2526 /* libEmulator.dylib */; };
-		8B3E99FC21F5690600FA2526 /* bios.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FB21F5690600FA2526 /* bios.c */; };
-		8B3E99FE21F5701D00FA2526 /* mmio.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FD21F5701D00FA2526 /* mmio.c */; };
-		8B3E9A0021F5766400FA2526 /* mmu.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FF21F5766400FA2526 /* mmu.c */; };
-		8B3E9A0221F585D800FA2526 /* wram.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E9A0121F585D800FA2526 /* wram.c */; };
-		8B430D1A21FBD80000DE5302 /* cart.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B430D1921FBD80000DE5302 /* cart.c */; };
-		8B430D1C21FE787000DE5302 /* cpu.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B430D1B21FE787000DE5302 /* cpu.c */; };
-		8B430D262201F5FA00DE5302 /* disasm.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B430D252201F5FA00DE5302 /* disasm.c */; };
 		8BA00B232203F584009CE00B /* intr.c in Sources */ = {isa = PBXBuildFile; fileRef = 8BA00B222203F584009CE00B /* intr.c */; };
+		8BF79B9522058DD5003CAB0D /* bios.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FB21F5690600FA2526 /* bios.c */; };
+		8BF79B9622058DD5003CAB0D /* mmio.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FD21F5701D00FA2526 /* mmio.c */; };
+		8BF79B9722058DD5003CAB0D /* mmu.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FF21F5766400FA2526 /* mmu.c */; };
+		8BF79B9822058DD5003CAB0D /* wram.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E9A0121F585D800FA2526 /* wram.c */; };
+		8BF79B9922058DD5003CAB0D /* cart.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B430D1921FBD80000DE5302 /* cart.c */; };
+		8BF79B9A22058DD5003CAB0D /* cpu.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B430D1B21FE787000DE5302 /* cpu.c */; };
+		8BF79B9B22058DD9003CAB0D /* disasm.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B430D252201F5FA00DE5302 /* disasm.c */; };
+		8BF79B9C22058DD9003CAB0D /* clock.c in Sources */ = {isa = PBXBuildFile; fileRef = 8BF79B9322058A55003CAB0D /* clock.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,6 +73,7 @@
 		8B430D252201F5FA00DE5302 /* disasm.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = disasm.c; sourceTree = "<group>"; };
 		8BA00B212203F490009CE00B /* intr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = intr.h; sourceTree = "<group>"; };
 		8BA00B222203F584009CE00B /* intr.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = intr.c; sourceTree = "<group>"; };
+		8BF79B9322058A55003CAB0D /* clock.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = clock.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -150,6 +152,7 @@
 				8B430D1B21FE787000DE5302 /* cpu.c */,
 				8B430D1D21FE7DC100DE5302 /* 指令集.h */,
 				8B430D252201F5FA00DE5302 /* disasm.c */,
+				8BF79B9322058A55003CAB0D /* clock.c */,
 			);
 			path = source;
 			sourceTree = "<group>";
@@ -285,14 +288,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8B3E99FE21F5701D00FA2526 /* mmio.c in Sources */,
-				8B430D1A21FBD80000DE5302 /* cart.c in Sources */,
-				8B430D262201F5FA00DE5302 /* disasm.c in Sources */,
-				8B3E99FC21F5690600FA2526 /* bios.c in Sources */,
-				8B3E9A0221F585D800FA2526 /* wram.c in Sources */,
 				8B3E99ED21F5343500FA2526 /* main.s in Sources */,
-				8B3E9A0021F5766400FA2526 /* mmu.c in Sources */,
-				8B430D1C21FE787000DE5302 /* cpu.c in Sources */,
 				8B3E99DC21F5321800FA2526 /* GBGameboyInstance.m in Sources */,
 				8B3E99C621F26BE600FA2526 /* GBAppDelegate.m in Sources */,
 			);
@@ -302,6 +298,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8BF79B9B22058DD9003CAB0D /* disasm.c in Sources */,
+				8BF79B9C22058DD9003CAB0D /* clock.c in Sources */,
+				8BF79B9522058DD5003CAB0D /* bios.c in Sources */,
+				8BF79B9622058DD5003CAB0D /* mmio.c in Sources */,
+				8BF79B9722058DD5003CAB0D /* mmu.c in Sources */,
+				8BF79B9822058DD5003CAB0D /* wram.c in Sources */,
+				8BF79B9922058DD5003CAB0D /* cart.c in Sources */,
+				8BF79B9A22058DD5003CAB0D /* cpu.c in Sources */,
 				8BA00B232203F584009CE00B /* intr.c in Sources */,
 				8B3E99E921F5342000FA2526 /* gameboy.c in Sources */,
 			);

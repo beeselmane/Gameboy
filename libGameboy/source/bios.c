@@ -1,5 +1,6 @@
 #include "bios.h"
 #include "gameboy.h"
+#include <stdio.h>
 
 #pragma mark - I/O Port
 
@@ -45,6 +46,12 @@ GBBIOSROM *GBBIOSROMCreate(UInt8 data[kGBBIOSROMSize])
         memcpy(bios->data, data, kGBBIOSROMSize);
         bios->install = __GBBIOSROMOnInstall;
 
+        bios->write = __GBBIOSROMWrite;
+        bios->read = __GBBIOSROMRead;
+
+        bios->start = 0x0000;
+        bios->end = kGBBIOSROMSize;
+
         bios->port = GBBIOSMaskPortCreate(bios);
         bios->masked = false;
 
@@ -71,4 +78,14 @@ bool __GBBIOSROMOnInstall(GBBIOSROM *this, GBGameboy *gameboy)
 
     GBIOMapperInstallPort(gameboy->mmio, (GBIORegister *)this->port);
     return true;
+}
+
+void __GBBIOSROMWrite(GBBIOSROM *this, UInt16 address, UInt8 byte)
+{
+    fprintf(stderr, "Warning: Write to BIOS ROM! (addr=0x%04X, byte=0x%02X)\n", address, byte);
+}
+
+UInt8 __GBBIOSROMRead(GBBIOSROM *this, UInt16 address)
+{
+    return this->data[address];
 }
