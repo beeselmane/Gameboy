@@ -16,6 +16,8 @@
 		8B3E99ED21F5343500FA2526 /* main.s in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99EC21F5343500FA2526 /* main.s */; };
 		8B3E99F721F5667B00FA2526 /* libEmulator.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B3E99E121F533C100FA2526 /* libEmulator.dylib */; };
 		8B4C28D422060F09005FE36A /* lcd.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B4C28D222060EFD005FE36A /* lcd.c */; };
+		8B4C28D622064014005FE36A /* tetris.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B4C28D522064014005FE36A /* tetris.gb */; };
+		8B659BD4220821D6002C9268 /* GBImageView.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B659BD3220821D6002C9268 /* GBImageView.m */; };
 		8BA00B232203F584009CE00B /* intr.c in Sources */ = {isa = PBXBuildFile; fileRef = 8BA00B222203F584009CE00B /* intr.c */; };
 		8BF79B9522058DD5003CAB0D /* bios.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FB21F5690600FA2526 /* bios.c */; };
 		8BF79B9622058DD5003CAB0D /* mmio.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FD21F5701D00FA2526 /* mmio.c */; };
@@ -73,6 +75,9 @@
 		8B430D242201F54800DE5302 /* disasm.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = disasm.h; sourceTree = "<group>"; };
 		8B430D252201F5FA00DE5302 /* disasm.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = disasm.c; sourceTree = "<group>"; };
 		8B4C28D222060EFD005FE36A /* lcd.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lcd.c; sourceTree = "<group>"; };
+		8B4C28D522064014005FE36A /* tetris.gb */ = {isa = PBXFileReference; lastKnownFileType = file; name = tetris.gb; path = games/tetris.gb; sourceTree = "<group>"; };
+		8B659BD2220821D6002C9268 /* GBImageView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBImageView.h; sourceTree = "<group>"; };
+		8B659BD3220821D6002C9268 /* GBImageView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBImageView.m; sourceTree = "<group>"; };
 		8BA00B212203F490009CE00B /* intr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = intr.h; sourceTree = "<group>"; };
 		8BA00B222203F584009CE00B /* intr.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = intr.c; sourceTree = "<group>"; };
 		8BF79B9322058A55003CAB0D /* clock.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = clock.c; sourceTree = "<group>"; };
@@ -103,6 +108,7 @@
 				8B3E99C321F26BE600FA2526 /* Gameboy */,
 				8B3E99E521F533FB00FA2526 /* libGameboy */,
 				8B3E99C221F26BE600FA2526 /* Products */,
+				8B4C28D522064014005FE36A /* tetris.gb */,
 				8B3E99F621F5667B00FA2526 /* Frameworks */,
 			);
 			sourceTree = "<group>";
@@ -123,6 +129,8 @@
 				8B3E99DB21F5321800FA2526 /* GBGameboyInstance.m */,
 				8B3E99C421F26BE600FA2526 /* GBAppDelegate.h */,
 				8B3E99C521F26BE600FA2526 /* GBAppDelegate.m */,
+				8B659BD2220821D6002C9268 /* GBImageView.h */,
+				8B659BD3220821D6002C9268 /* GBImageView.m */,
 				8B3E99C721F26BE700FA2526 /* Assets.xcassets */,
 				8B3E99C921F26BE800FA2526 /* MainMenu.xib */,
 				8B3E99CC21F26BE800FA2526 /* Info.plist */,
@@ -279,6 +287,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8B4C28D622064014005FE36A /* tetris.gb in Resources */,
 				8B3E99C821F26BE700FA2526 /* Assets.xcassets in Resources */,
 				8B3E99CB21F26BE800FA2526 /* MainMenu.xib in Resources */,
 			);
@@ -294,6 +303,7 @@
 				8B3E99ED21F5343500FA2526 /* main.s in Sources */,
 				8B3E99DC21F5321800FA2526 /* GBGameboyInstance.m in Sources */,
 				8B3E99C621F26BE600FA2526 /* GBAppDelegate.m in Sources */,
+				8B659BD4220821D6002C9268 /* GBImageView.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

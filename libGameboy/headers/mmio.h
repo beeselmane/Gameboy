@@ -15,8 +15,11 @@ typedef struct __GBIORegister {
     UInt8 value;
 } GBIORegister;
 
-void __GBIORegisterNullWrite(GBIORegister *reg, UInt8 value);
+void __GBIORegisterNullWrite(GBIORegister *reg, UInt8 byte);
 UInt8 __GBIORegisterNullRead(GBIORegister *reg);
+
+void __GBIORegisterSimpleWrite(GBIORegister *reg, UInt8 byte);
+UInt8 __GBIORegisterSimpleRead(GBIORegister *reg);
 
 typedef struct __GBIOMapper {
     bool (*install)(struct __GBIOMapper *this, GBGameboy *gameboy);

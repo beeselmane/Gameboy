@@ -23,6 +23,7 @@ UInt8 rom[0x100] = {
 };
 
 GBGameboy *gameboy;
+UInt8 op = 0x00;
 
 @interface GBAppDelegate ()
 
@@ -64,8 +65,25 @@ GBGameboy *gameboy;
     [_boxSP setStringValue:[NSString stringWithFormat:@"0x%04X", gameboy->cpu->state.sp]];
     [_boxPC setStringValue:[NSString stringWithFormat:@"0x%04X", gameboy->cpu->state.pc]];
 
-    [_boxMode setStringValue:[NSString stringWithFormat:@"%d", gameboy->cpu->state.mode]];
+    NSString *mode;
+
+    switch (gameboy->cpu->state.mode)
+    {
+        case kGBProcessorModeHalted:  mode = @"Halted";         break;
+        case kGBProcessorModeStopped: mode = @"Stopped";        break;
+        case kGBProcessorModeOff:     mode = @"Off";            break;
+        case kGBProcessorModeFetch:   mode = @"Fetch";          break;
+        case kGBProcessorModePrefix:  mode = @"Prefixed Fetch"; break;
+        case kGBProcessorModeStalled: mode = @"Stalled";        break;
+        case kGBProcessorModeRun:     mode = @"Running";        break;
+        case kGBProcessorModeWait1:   mode = @"Wait 1";         break;
+        case kGBProcessorModeWait2:   mode = @"Wait 2";         break;
+        case kGBProcessorModeWait3:   mode = @"Wait 3";         break;
+        case kGBProcessorModeWait4:   mode = @"Wait 4";         break;
+    }
+
     [_boxTicks setStringValue:[NSString stringWithFormat:@"%llu", gameboy->clock->ticks]];
+    [_boxMode setStringValue:mode];
 
     [_boxIME setStringValue:[NSString stringWithFormat:@"%d", gameboy->cpu->state.ime]];
     [_boxAccessed setStringValue:[NSString stringWithFormat:@"%d", gameboy->cpu->state.accessed]];
@@ -74,41 +92,52 @@ GBGameboy *gameboy;
     [_boxMDR setStringValue:[NSString stringWithFormat:@"0x%02X", gameboy->cpu->state.mdr]];
 
     [_boxOP setStringValue:[NSString stringWithFormat:@"0x%02X", gameboy->cpu->state.op]];
+    [_boxPrefix setStringValue:[NSString stringWithFormat:@"%d", gameboy->cpu->state.prefix]];
 
     [_boxZF setStringValue:[NSString stringWithFormat:@"%d", gameboy->cpu->state.f.z]];
     [_boxNF setStringValue:[NSString stringWithFormat:@"%d", gameboy->cpu->state.f.n]];
     [_boxHF setStringValue:[NSString stringWithFormat:@"%d", gameboy->cpu->state.f.h]];
     [_boxCF setStringValue:[NSString stringWithFormat:@"%d", gameboy->cpu->state.f.c]];
 
-    UInt8 buffer[4];
-    UInt16 pc = gameboy->cpu->state.pc;
-    UInt8 i = 0;
-    UInt8 op;
-
-    while ((op = __GBMemoryManagerRead(gameboy->cpu->mmu, pc)) != gameboy->cpu->state.op)
+    if (gameboy->cpu->state.mode == kGBProcessorModeFetch)
     {
-        if (pc)
-            pc--;
-        else
-            break;
-    }
+        UInt16 pc = gameboy->cpu->state.pc;
+        UInt8 buffer[4];
+        //UInt8 i = 0;
+        //UInt8 op;
 
-    if (gameboy->cpu->state.prefix)
-        buffer[i++] = 0xCB;
+        //if (pc)
+        //    pc--;
 
-    buffer[0] = __GBMemoryManagerRead(gameboy->cpu->mmu, pc + 0);
-    buffer[1] = __GBMemoryManagerRead(gameboy->cpu->mmu, pc + 1);
-    buffer[2] = __GBMemoryManagerRead(gameboy->cpu->mmu, pc + 2);
+        /*while ((op = __GBMemoryManagerRead(gameboy->cpu->mmu, pc)) != gameboy->cpu->state.op)
+        {
+            if (pc)
+                pc--;
+            else
+                break;
+        }
 
-    GBDisassemblyInfo *info = GBDisassembleSingle(buffer, 3, NULL);
+        if (gameboy->cpu->state.prefix)
+            buffer[i++] = 0xCB;
 
-    if (info) {
-        [_boxASM setStringValue:[NSString stringWithUTF8String:info->string]];
+        buffer[i++] = __GBMemoryManagerRead(gameboy->cpu->mmu, pc + 0);
+        buffer[i++] = __GBMemoryManagerRead(gameboy->cpu->mmu, pc + 1);
+        buffer[i  ] = __GBMemoryManagerRead(gameboy->cpu->mmu, pc + 2);*/
 
-        free(info->string);
-        free(info);
-    } else {
-        [_boxASM setStringValue:@"??????"];
+        buffer[0] = __GBMemoryManagerRead(gameboy->cpu->mmu, pc + 0);
+        buffer[1] = __GBMemoryManagerRead(gameboy->cpu->mmu, pc + 1);
+        buffer[2] = __GBMemoryManagerRead(gameboy->cpu->mmu, pc + 2);
+
+        GBDisassemblyInfo *info = GBDisassembleSingle(buffer, 3, NULL);
+
+        if (info) {
+            [_boxASM setStringValue:[NSString stringWithUTF8String:info->string]];
+
+            free(info->string);
+            free(info);
+        } else {
+            [_boxASM setStringValue:@"??????"];
+        }
     }
 }
 
@@ -146,6 +175,14 @@ GBGameboy *gameboy;
 
     GBGameboyPowerOn(gameboy);
 
+    NSData *game = [NSData dataWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"tetris" ofType:@"gb"]];
+
+    GBCartridge *cart = GBCartridgeCreate((UInt8 *)[game bytes], (UInt32)[game length]);
+    bool inserted = GBCartridgeInsert(cart, gameboy);
+
+    if (inserted)
+        printf("Loaded ROM!\n");
+
     [self setBoxes];
 }
 
@@ -162,17 +199,13 @@ GBGameboy *gameboy;
 - (IBAction) step:(id)sender
 {
     NSInteger steps = [[_ticksBox stringValue] integerValue];
-    UInt8 op = gameboy->cpu->state.op;
 
     for (NSInteger i = 0; i < steps; )
     {
         GBClockTick(gameboy->clock);
 
-        if (gameboy->cpu->state.op != op)
-        {
-            op = gameboy->cpu->state.op;
+        if (gameboy->cpu->state.mode == kGBProcessorModeFetch)
             i++;
-        }
     }
 
     [self setBoxes];
@@ -191,6 +224,191 @@ GBGameboy *gameboy;
     }
 
     [self setBoxes];
+}
+
+- (NSBitmapImageRep *) makeBitmapImageOfWidth:(UInt32)width height:(UInt32) height
+{
+    NSBitmapImageRep *bitmapImage = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:nil
+                                                                            pixelsWide:width
+                                                                            pixelsHigh:height
+                                                                         bitsPerSample:8
+                                                                       samplesPerPixel:3
+                                                                              hasAlpha:NO
+                                                                              isPlanar:NO
+                                                                        colorSpaceName:NSCalibratedRGBColorSpace
+                                                                           bytesPerRow:(width * 4)
+                                                                          bitsPerPixel:32];
+
+    //memcpy([bitmapImage bitmapData], rgbData, width * height * sizeof(UInt32));
+
+    //return [[NSImage alloc] initWithCGImage:[bitmapImage CGImage] size:NSMakeSize(width, height)];
+    return bitmapImage;
+}
+
+- (void) decodeTile:(UInt8 *)tileSource into:(UInt32 [8 * 8])result
+{
+    UInt32 lookup[4] = {0xEEEEEE, 0x000000, 0x555555, 0xBBBBBB};
+
+    for (UInt8 y = 0; y < 0x10; y += 2)
+    {
+        for (UInt8 x = 0; x < 0x8; x++)
+        {
+            UInt8 value = ((tileSource[y + 1] >> x) << 1) & 2;
+            value |= (tileSource[y] >> x) & 1;
+
+            result[(y * 4) + (7 - x)] = lookup[value];
+        }
+    }
+}
+
+- (IBAction) image:(id)sender
+{
+    UInt8 control = gameboy->mmio->portMap[0x40]->value;
+    bool highmap = control & 0x10;
+
+    //UInt16 offset = (control & 0x10) ? 0x0800 : 0x0000;
+    UInt8 *map1src = &gameboy->vram->memory[0x1800];
+    //UInt8 *map0src = &gameboy->vram->memory[0x1C00];
+    UInt8 *tileset = &gameboy->vram->memory[0];
+
+    //UInt32 map1data[32 * 32 * 8 * 8];
+    //UInt32 map0data[32 * 32 * 8 * 8];
+    NSBitmapImageRep *tileImage = [self makeBitmapImageOfWidth:128 height:192];
+    UInt32 tiles[384][8 * 8];
+    // 16x24
+
+    UInt32 black[8 * 8] = {
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0
+    };
+
+    UInt32 white[8 * 8] = {
+        0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF,
+        0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF,
+        0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF,
+        0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF,
+        0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF,
+        0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF,
+        0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF,
+        0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF, 0xFFFFFF,
+    };
+
+    for (UInt16 i = 0; i < 384; i++)
+    {
+        [self decodeTile:&tileset[i * 0x10] into:tiles[i]];
+        /*if (i && i <= 0x18)
+            memcpy(tiles[i], black, 64 * sizeof(UInt32));
+        else
+            memcpy(tiles[i], white, 64 * sizeof(UInt32));*/
+
+        UInt16 y = i / 16;
+        UInt16 x = i % 16;
+
+        for (UInt8 y0 = 0; y0 < 8; y0++)
+        {
+            for (UInt8 x0 = 0; x0 < 8; x0++)
+            {
+                NSUInteger color = tiles[i][(y0 * 8) + x0];
+
+                NSUInteger rgb[3] = {
+                    (color >> 16) & 0xFF,
+                    (color >>  8) & 0xFF,
+                    (color >>  0) & 0xFF
+                };
+
+                [tileImage setPixel:rgb atX:((x * 8) + x0) y:((y * 8) + y0)];
+            }
+        }
+    }
+
+    [_paletteImage setImage:[[NSImage alloc] initWithCGImage:[tileImage CGImage] size:NSMakeSize(128, 192)]];
+
+    NSBitmapImageRep *map1img = [self makeBitmapImageOfWidth:256 height:256];
+
+    for (UInt8 y = 0; y < 32; y++)
+    {
+        for (UInt8 x = 0; x < 32; x++)
+        {
+            UInt8 tile;
+
+            if (highmap) {
+                tile = map1src[(y * 32) + x];
+            } else {
+                tile = map1src[(y * 32) + x];
+            }
+
+
+            for (UInt8 y0 = 0; y0 < 8; y0++)
+            {
+                for (UInt8 x0 = 0; x0 < 8; x0++)
+                {
+                    NSUInteger color = tiles[tile][(y0 * 8) + x0];
+
+                    NSUInteger rgb[3] = {
+                        (color >> 16) & 0xFF,
+                        (color >>  8) & 0xFF,
+                        (color >>  0) & 0xFF
+                    };
+
+                    [map1img setPixel:rgb atX:((x * 8) + x0) y:((y * 8) + y0)];
+                }
+
+            }
+        }
+    }
+
+    [_bgImage1 setImage:[[NSImage alloc] initWithCGImage:[map1img CGImage] size:NSMakeSize(256, 256)]];
+    // We should have tiles now...
+
+    /*
+    // 32x32 tiles, 256x256 pixels
+
+    // decode every 2 bytes s.t. every 16 makes an 8x8 tile.
+
+    UInt32 expanded[64 * 1024];
+
+    //UInt8 etile[0x10] = {0xAA, 0xAA, 0x00, 0xAA, 0xAA, 0xAA, 0xAA, 0x00, 0xAA, 0xAA, 0x00, 0xAA, 0xAA, 0xAA, 0xAA, 0x00};
+
+    //for (UInt16 i = 0; i < 256; i++)
+    //    memcpy(&tileset[i * 0x10], etile, 0x10);
+
+    for (UInt16 tile = 0; tile < 512; tile++)
+    {
+        UInt8 *tileSource = &tileset[tile * 0x10];
+        UInt32 destY = tile / 32;
+        UInt32 destX = tile - (destY * 32);
+
+        destY *= 8;
+        destX *= 8;
+
+        printf("%d --> (%d, %d)\n", tile, destX, destY);
+        UInt16 maxIndex = 0;
+
+        for (UInt8 y = 0; y < 0x10; y += 2)
+        {
+            for (UInt8 x = 0; x < 0x8; x++)
+            {
+                UInt8 value = ((tileSource[y + 1] >> x) << 1) & 2;
+                value |= (tileSource[y] >> x) & 1;
+
+                UInt16 index = ((destY + (y / 2)) * 256) + (destX + x);
+                expanded[index] = lookup[value];
+
+                if (index > maxIndex)
+                    maxIndex = index;
+            }
+        }
+
+        printf("Max: %d\n", maxIndex);
+    }
+
+    [_imageView setImage:[self makeImage:expanded width:256 height:256]];*/
 }
 
 @end

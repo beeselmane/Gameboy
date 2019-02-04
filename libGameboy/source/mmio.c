@@ -7,9 +7,9 @@
 
 GBIORegister *gGBIOMapperNullPorts[(kGBIOMapperFinalAddress - kGBIOMapperFirstAddress) + 1];
 
-void __GBIORegisterNullWrite(GBIORegister *reg, UInt8 value)
+void __GBIORegisterNullWrite(GBIORegister *reg, UInt8 byte)
 {
-    fprintf(stderr, "Warning: Attempt to write byte '0x%02X' to nonexistant I/O Port '0x%04X'\n", value, reg->address);
+    fprintf(stderr, "Warning: Attempt to write byte '0x%02X' to nonexistant I/O Port '0x%04X'\n", byte, reg->address);
 }
 
 UInt8 __GBIORegisterNullRead(GBIORegister *reg)
@@ -17,6 +17,18 @@ UInt8 __GBIORegisterNullRead(GBIORegister *reg)
     fprintf(stderr, "Warning: Attempt to read byte from nonexistant I/O Port '0x%04X'\n", reg->address);
 
     return 0xFF;
+}
+
+#pragma mark - Simple Read/Write
+
+void __GBIORegisterSimpleWrite(GBIORegister *reg, UInt8 byte)
+{
+    reg->value = byte;
+}
+
+UInt8 __GBIORegisterSimpleRead(GBIORegister *reg)
+{
+    return reg->value;
 }
 
 #pragma mark - I/O Mapper

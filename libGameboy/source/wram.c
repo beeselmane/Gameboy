@@ -41,11 +41,19 @@ void GBHighRAMDestroy(GBHighRAM *this)
 
 void __GBHighRAMWrite(GBHighRAM *this, UInt16 address, UInt8 byte)
 {
+    //UInt16 addr = address & (~kGBHighRAMStart);
+
+    //fprintf(stdout, "HRAM: Writing 0x%02X to 0x%04X (0x%04X)\n", byte, address, addr);
+
     this->memory[address & (~kGBHighRAMStart)] = byte;
 }
 
 UInt8 __GBHighRAMRead(GBHighRAM *this, UInt16 address)
 {
+    //UInt16 addr = address & (~kGBHighRAMStart);
+
+    //fprintf(stdout, "HRAM: Read byte 0x%02X rfom 0x%04X (0x%04X)\n", this->memory[addr], address, addr);
+
     return this->memory[address & (~kGBHighRAMStart)];
 }
 

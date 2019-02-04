@@ -25,11 +25,13 @@ void GBClockTick(GBClock *this)
 
     this->ticks++;
 
-    // Every 4 ticks tick memory once
-    if (!(this->ticks & 3))
-        this->gameboy->cpu->mmu->tick(this->gameboy->cpu->mmu);
+    GBMemoryManager *mmu = this->gameboy->cpu->mmu;
+    GBGraphicsDriver *driver = this->gameboy->driver;
+    GBProcessor *cpu = this->gameboy->cpu;
 
-    this->gameboy->cpu->tick(this->gameboy->cpu);
+    mmu->tick(mmu, this->ticks);
+    driver->tick(driver, this->ticks);
+    cpu->tick(cpu, this->ticks);
 }
 
 void GBClockDestroy(GBClock *this)

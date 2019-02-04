@@ -142,8 +142,12 @@ void GBMemoryManagerReadRequest(GBMemoryManager *this, UInt16 *mar, UInt8 *mdr, 
     this->isWrite = false;
 }
 
-void __GBMemoryManagerTick(GBMemoryManager *this)
+void __GBMemoryManagerTick(GBMemoryManager *this, UInt64 tick)
 {
+    // We tick at 1 MHz
+    if (tick % 4)
+        return;
+
     if (this->mar && this->mdr)
     {
         if (this->isWrite) {

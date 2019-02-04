@@ -64,7 +64,7 @@ typedef struct __GBMemoryManager {
     bool *accessed;
     bool isWrite;
 
-    void (*tick)(struct __GBMemoryManager *this);
+    void (*tick)(struct __GBMemoryManager *this, UInt64 tick);
 } GBMemoryManager;
 
 GBMemoryManager *GBMemoryManagerCreate(void);
@@ -79,7 +79,7 @@ void GBMemoryManagerReadRequest(GBMemoryManager *this, UInt16 *mar, UInt8 *mdr, 
 void __GBMemoryManagerWrite(GBMemoryManager *this, UInt16 address, UInt8 byte);
 UInt8 __GBMemoryManagerRead(GBMemoryManager *this, UInt16 address);
 
-void __GBMemoryManagerTick(GBMemoryManager *this);
+void __GBMemoryManagerTick(GBMemoryManager *this, UInt64 tick);
 
 extern GBMemorySpace *gGBMemorySpaceNull;
 

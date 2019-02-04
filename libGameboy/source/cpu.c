@@ -84,7 +84,7 @@ void GBDispatchOP(GBProcessor *this)
     op->go(op, this);
 }
 
-void __GBProcessorTick(GBProcessor *this)
+void __GBProcessorTick(GBProcessor *this, UInt64 tick)
 {
     switch (this->state.mode)
     {
@@ -115,6 +115,7 @@ void __GBProcessorTick(GBProcessor *this)
             {
                 if (this->state.mdr == 0xCB) {
                     this->state.prefix = true;
+                    this->state.op = 0xCB;
 
                     __GBProcessorRead(this, this->state.pc++);
 

@@ -71,19 +71,21 @@ typedef struct __GBProcessor {
 
         UInt16 data; // misc. data for some instructions
         SInt8 mode;
+
+        bool bug;
     } state;
 
     GBProcessorOP *decode_prefix[0x100];
     GBProcessorOP *decode[0x100];
 
-    void (*tick)(struct __GBProcessor *this);
+    void (*tick)(struct __GBProcessor *this, UInt64 tick);
 } GBProcessor;
 
 GBProcessor *GBProcessorCreate(void);
 void GBDispatchOP(GBProcessor *this);
 void GBProcessorDestroy(GBProcessor *this);
 
-void __GBProcessorTick(GBProcessor *this);
+void __GBProcessorTick(GBProcessor *this, UInt64 tick);
 
 typedef struct __GBProcessorState GBProcessorState;
 

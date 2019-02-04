@@ -12,16 +12,17 @@
 GBCartROM *GBCartROMCreateWithNullMapper(UInt8 *romData, UInt8 banks)
 {
     GBCartROM *rom = malloc(sizeof(GBCartROM));
+    UInt16 bankSize = kGBMemoryBankSize * 4;
 
     if (rom)
     {
-        rom->romData = malloc(banks * kGBMemoryBankSize);
+        rom->romData = malloc(banks * bankSize);
 
         if (!rom->romData) {
             free(rom);
             return NULL;
         } else {
-            memcpy(rom->romData, romData, banks * kGBMemoryBankSize);
+            memcpy(rom->romData, romData, banks * bankSize);
         }
 
         rom->install = GBCartROMOnInstall;
@@ -56,12 +57,12 @@ void GBCartROMWriteNull(GBCartROM *this, UInt16 address, UInt8 byte)
     fprintf(stderr, "Warning: Attempting to write directly to ROM! (addr=0x%04X, byte=0x%02X)\n", address, byte);
 }
 
-UInt8 GBCartROMReadDirect(GBCartROM *this, UInt16 address)
+UInt8 GBCartROMReadDirect(GBCartROM *s, UInt16 address)
 {
     if (address <= kGBCartROMBankLowEnd) {
-        return this->romData[address & (~kGBMemoryBankMask)];
+        return s->romData[address & (~kGBMemoryBankMask)];
     } else {
-        UInt8 *bankStart = this->romData + (this->bank * kGBMemoryBankSize);
+        UInt8 *bankStart = s->romData + (s->bank * kGBMemoryBankSize);
 
         return bankStart[address & (~kGBMemoryBankMask)];
     }
@@ -176,7 +177,81 @@ bool GBCartRAMOnEject(GBCartRAM *this, GBGameboy *gameboy)
 
 #pragma mark - Cartridge Structure
 
-GBCartridge *GBCartridgeCreate(UInt8 *romData, UInt32 romSize);
+GBCartridge *GBCartridgeCreate(UInt8 *romData, UInt32 romSize)
+{
+    GBCartridge *cartridge = malloc(sizeof(GBCartridge));
+
+    if (cartridge)
+    {
+        GBGameHeader *header = (GBGameHeader *)(romData + 0x100);
+        UInt16 checksum = 0;
+
+        if (header->licenseCode == 0x33) {
+            char title[12];
+
+            memcpy(title, header->title, 11);
+            title[11] = 0;
+
+            fprintf(stdout, "Info: Loading cartridge for '%s'\n", title);
+            fprintf(stdout, "Info: Manufacturing code: %c%c%c%c\n",
+                    header->maker[0], header->maker[1], header->maker[2], header->maker[3]);
+        } else {
+            char title[17];
+
+            memcpy(title, &header->title, 16);
+            title[16] = 0;
+
+            fprintf(stdout, "Info: Loading cartridge for '%s'\n", title);
+        }
+
+        for (UInt32 i = 0; i < romSize; i++)
+        {
+            if (i == 0x014E || i == 0x014F)
+                continue;
+
+            checksum += romData[i];
+        }
+
+        checksum = ((checksum & 0xFF) << 8) | (checksum >> 8);
+
+        if (checksum == header->checksum)
+            fprintf(stdout, "Info: Checksum okay.\n");
+        else
+            fprintf(stdout, "Warning: Checksum invalid! (expected 0x%04X, calculated 0x%04X)\n", header->checksum, checksum);
+
+        if (header->type != 0x00)
+        {
+            fprintf(stderr, "Error: Unsupported cart. type\n");
+            free(cartridge);
+
+            return NULL;
+        }
+
+        if (header->romSize > 0x07) {
+            fprintf(stderr, "Error: Unknown ROM size.\n");
+            free(cartridge);
+
+            return NULL;
+        } else {
+            cartridge->rom = GBCartROMCreateWithNullMapper(romData, 1 + (1 << header->romSize));
+
+            if (!cartridge->rom)
+            {
+                free(cartridge);
+
+                return NULL;
+            }
+        }
+
+        cartridge->hasRAM = false;
+        cartridge->ram = NULL;
+
+        cartridge->mbcType = 0x00;
+        cartridge->installed = false;
+    }
+
+    return cartridge;
+}
 
 void GBCartridgeDestroy(GBCartridge *this)
 {

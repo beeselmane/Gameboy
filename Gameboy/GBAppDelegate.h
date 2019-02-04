@@ -5,6 +5,7 @@
 - (IBAction) tick:(id)sender;
 - (IBAction) step:(id)sender;
 - (IBAction) run:(id)sender;
+- (IBAction) image:(id)sender;
 
 @property (strong) IBOutlet NSTextField *boxA;
 @property (strong) IBOutlet NSTextField *boxB;
@@ -29,5 +30,9 @@
 @property (weak) IBOutlet NSTextField *boxHF;
 @property (weak) IBOutlet NSTextField *boxCF;
 @property (weak) IBOutlet NSTextField *breakpointBox;
+@property (weak) IBOutlet NSTextField *boxPrefix;
+
+@property (weak) IBOutlet NSImageView *bgImage1;
+@property (weak) IBOutlet NSImageView *paletteImage;
 
 @end

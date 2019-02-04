@@ -13,6 +13,26 @@
 #define kGBCartRAMBankStart         0xA000
 #define kGBCartRAMBankEnd           0xBFFF
 
+typedef struct {
+    UInt8 entry[3];
+    UInt8 logo[48];
+    UInt8 title[11];
+    UInt8 maker[4];
+    UInt8 cgb;
+    UInt8 newLicenseCode[2];
+    UInt8 sgb;
+    UInt8 type;
+    UInt8 romSize;
+    UInt8 ramSize;
+    UInt8 destination;
+    UInt8 licenseCode;
+    UInt8 version;
+    UInt8 headerChecksum;
+    UInt16 checksum;
+} GBGameHeader;
+
+#pragma mark - ROM
+
 typedef struct __GBCartROM {
     bool (*install)(struct __GBCartROM *this, GBGameboy *gameboy);
 
@@ -39,6 +59,8 @@ UInt8 GBCartROMReadDirect(GBCartROM *this, UInt16 address);
 bool GBCartROMOnInstall(GBCartROM *this, GBGameboy *gameboy);
 bool GBCartROMOnEject(GBCartROM *this, GBGameboy *gameboy);
 
+#pragma mark - RAM
+
 typedef struct __GBCartRAM {
     bool (*install)(struct __GBCartRAM *this, GBGameboy *gameboy);
 
@@ -64,6 +86,8 @@ UInt8 GBCartRAMReadDirect(GBCartRAM *this, UInt16 address);
 
 bool GBCartRAMOnInstall(GBCartRAM *this, GBGameboy *gameboy);
 bool GBCartRAMOnEject(GBCartRAM *this, GBGameboy *gameboy);
+
+#pragma mark - Cartridge
 
 typedef struct __GBCartridge {
     GBCartROM *rom;

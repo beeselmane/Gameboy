@@ -82,7 +82,7 @@ static __attribute__((always_inline)) void __ALUAdd16(GBProcessor *cpu, UInt16 *
 
 static __attribute__((always_inline)) void __ALUSub8(GBProcessor *cpu, SInt8 *to, SInt8 *from, UInt8 carry)
 {
-    // I forgot how 2's complemnet works so I did this instead
+    // I forgot how 2's complement works so I did this instead
     SInt8 result = (*to) - (*from) + carry;
 
     cpu->state.f.z = !result;
@@ -156,6 +156,8 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
 }
 
 #endif /* !defined(kGBDisassembler) */
+
+#pragma mark - Data Formatting Macros
 
 // Instruction data formats
 #ifndef kGBNumberFormatting
@@ -495,13 +497,13 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
                     return;                                                             \
                 }                                                                       \
                                                                                         \
-                __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.pc >> 8);           \
+                __GBProcessorWrite(cpu, cpu->state.sp - 1, cpu->state.pc >> 8);         \
                 cpu->state.mode = kGBProcessorModeWait3;                                \
             }                                                                           \
         } else if (cpu->state.mode == kGBProcessorModeWait3) {                          \
             if (cpu->state.accessed)                                                    \
             {                                                                           \
-                __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.pc & 0xFF);         \
+                __GBProcessorWrite(cpu, cpu->state.sp - 2, cpu->state.pc & 0xFF);       \
                                                                                         \
                 cpu->state.mode = kGBProcessorModeWait4;                                \
             }                                                                           \
@@ -511,6 +513,7 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
                 __GBProcessorRead(cpu, 0x0000);                                         \
                                                                                         \
                 cpu->state.pc = cpu->state.data;                                        \
+                cpu->state.sp -= 2;                                                     \
                                                                                         \
                 cpu->state.mode = kGBProcessorModeStalled;                              \
             }                                                                           \
@@ -531,13 +534,14 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
             return;                                                                     \
         }                                                                               \
                                                                                         \
-        __GBProcessorRead(cpu, cpu->state.sp++);                                        \
+        __GBProcessorRead(cpu, cpu->state.sp + 0);                                      \
     }, {                                                                                \
-        __GBProcessorRead(cpu, cpu->state.sp++);                                        \
+        __GBProcessorRead(cpu, cpu->state.sp + 1);                                      \
                                                                                         \
         cpu->state.pc = cpu->state.mdr;                                                 \
     }, {                                                                                \
         cpu->state.pc |= cpu->state.mdr << 8;                                           \
+        cpu->state.sp += 2;                                                             \
     })
 
 #define rst(code, dst)                                                                  \
@@ -553,22 +557,23 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
 
 #define pop(code, regs)                                                     \
     op_wait2_stall(code, 1, "pop " #regs, {                                 \
-        __GBProcessorRead(cpu, cpu->state.sp++);                            \
+        __GBProcessorRead(cpu, cpu->state.sp + 0);                          \
     }, {                                                                    \
         cpu->state.regs = cpu->state.mdr;                                   \
                                                                             \
-        __GBProcessorRead(cpu, cpu->state.sp++);                            \
+        __GBProcessorRead(cpu, cpu->state.sp + 1);                          \
     }, {                                                                    \
         cpu->state.regs |= cpu->state.mdr << 8;                             \
+        cpu->state.sp += 2;                                                 \
     })
 
 #define push(code, regs)                                                    \
     op_wait2_stall(code, 1, "push " #regs, {                                \
-        __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.regs >> 8);     \
+        __GBProcessorWrite(cpu, cpu->state.sp - 1, cpu->state.regs >> 8);   \
     }, {                                                                    \
-        __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.regs & 0xFF);   \
+        __GBProcessorWrite(cpu, cpu->state.sp - 2, cpu->state.regs & 0xFF); \
     }, {                                                                    \
-        /* nothing */                                                       \
+        cpu->state.sp -= 2;                                                 \
     })
 
 #pragma mark - Undefined instruction macros
@@ -658,7 +663,7 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
 
 #pragma mark - Instruction Implementation
 
-op(0x00, 1, "nop", { /* nop doesn't do anything, sorry */ });
+op_simple(0x00, "nop", { /* nop doesn't do anything, sorry */ });
 
 ld_rr(0x01, bc);
 
@@ -1105,13 +1110,14 @@ rst(0xC7, 0x00);
 ret(0xC8, "z", cpu->state.f.z);
 
 op_wait2_stall(0xC9, 1, "ret", {
-    __GBProcessorRead(cpu, cpu->state.sp++);
+    __GBProcessorRead(cpu, cpu->state.sp + 0);
 }, {
     cpu->state.pc = cpu->state.mdr;
 
-    __GBProcessorRead(cpu, cpu->state.sp++);
+    __GBProcessorRead(cpu, cpu->state.sp + 1);
 }, {
     cpu->state.pc |= (cpu->state.mdr << 8);
+    cpu->state.sp += 2;
 });
 
 jmp(0xCA, "z, ", cpu->state.f.z);
@@ -1141,13 +1147,15 @@ rst(0xD7, 0x10);
 ret(0xD8, "c", cpu->state.f.c);
 
 op_wait2_stall(0xD9, 1, "reti", {
-    __GBProcessorRead(cpu, cpu->state.sp++);
+    __GBProcessorRead(cpu, cpu->state.sp + 0);
 }, {
     cpu->state.pc = cpu->state.mdr;
 
-    __GBProcessorRead(cpu, cpu->state.sp++);
+    __GBProcessorRead(cpu, cpu->state.sp + 1);
 }, {
     cpu->state.pc |= (cpu->state.mdr << 8);
+    cpu->state.sp += 2;
+
     cpu->state.ime = true;
 });
 
@@ -1234,13 +1242,14 @@ op_wait2(0xF0, 2, "ld a, " d8 "(" dIO ")", {
 });
 
 op_wait2_stall(0xF1, 1, "pop af", {
-    __GBProcessorRead(cpu, cpu->state.sp++);
+    __GBProcessorRead(cpu, cpu->state.sp + 0);
 }, {
     cpu->state.f.reg = cpu->state.mdr;
 
-    __GBProcessorRead(cpu, cpu->state.sp++);
+    __GBProcessorRead(cpu, cpu->state.sp + 1);
 }, {
     cpu->state.a = cpu->state.mdr;
+    cpu->state.sp += 2;
 });
 
 op_wait(0xF2, 1, "ld a, c(" dIO ")", {
@@ -1258,11 +1267,11 @@ op(0xF3, 1, "di", {
 udef(0xF4);
 
 op_wait2_stall(0xF5, 1, "push af", {
-    __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.a);
+    __GBProcessorWrite(cpu, cpu->state.sp - 1, cpu->state.a);
 }, {
-    __GBProcessorWrite(cpu, cpu->state.sp--, cpu->state.f.reg);
+    __GBProcessorWrite(cpu, cpu->state.sp - 2, cpu->state.f.reg);
 }, {
-    // We're done
+    cpu->state.sp -= 2;
 });
 
 alu_op_arg(0xF6, "or", __ALUOr8);
