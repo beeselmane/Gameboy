@@ -60,11 +60,20 @@ void GBCartROMWriteNull(GBCartROM *this, UInt16 address, UInt8 byte)
 UInt8 GBCartROMReadDirect(GBCartROM *s, UInt16 address)
 {
     if (address <= kGBCartROMBankLowEnd) {
-        return s->romData[address & (~kGBMemoryBankMask)];
+        return s->romData[address];
     } else {
-        UInt8 *bankStart = s->romData + (s->bank * kGBMemoryBankSize);
+        UInt8 *bankStart = s->romData + (s->bank * (kGBMemoryBankSize * 4));
+        UInt16 offset = 0x0FFF & address;
 
-        return bankStart[address & (~kGBMemoryBankMask)];
+
+        switch (address & 0xF000)
+        {
+            case 0x4000: return bankStart[0x0000 | offset];
+            case 0x5000: return bankStart[0x1000 | offset];
+            case 0x6000: return bankStart[0x2000 | offset];
+            case 0x7000: return bankStart[0x3000 | offset];
+            default:     return 0xFF;
+        }
     }
 }
 
@@ -98,7 +107,7 @@ GBCartRAM *GBCartRAMCreateWithNullMapper(UInt8 banks)
 
     if (ram)
     {
-        ram->ramData = malloc(banks * kGBMemoryBankSize);
+        ram->ramData = malloc(banks * (kGBMemoryBankSize * 2));
 
         if (!ram->ramData) {
             free(ram);
@@ -106,9 +115,9 @@ GBCartRAM *GBCartRAMCreateWithNullMapper(UInt8 banks)
         } else {
             #ifdef __APPLE__
                 // This warns if we ignore the result implicitly
-                __unused int result = SecRandomCopyBytes(kSecRandomDefault, banks * kGBMemoryBankSize, ram->ramData);
+                __unused int result = SecRandomCopyBytes(kSecRandomDefault, banks * (kGBMemoryBankSize * 2), ram->ramData);
             #else /* !defined(__APPLE__) */
-                bzero(ram->ramData, banks * kGBMemoryBankSize);
+                bzero(ram->ramData, banks * (kGBMemoryBankSize * 2));
             #endif /* defined(__APPLE__) */
         }
 
@@ -141,16 +150,16 @@ void GBCartRAMDestroy(GBCartRAM *this)
 
 void GBCartRAMWriteDirect(GBCartRAM *this, UInt16 address, UInt8 byte)
 {
-    UInt8 *bankStart = this->ramData + (this->bank * kGBMemoryBankSize);
+    UInt8 *bankStart = this->ramData + (this->bank * (kGBMemoryBankSize * 2));
 
-    bankStart[address & (~kGBMemoryBankMask)] = byte;
+    bankStart[address & (~0xA0)] = byte;
 }
 
 UInt8 GBCartRAMReadDirect(GBCartRAM *this, UInt16 address)
 {
-    UInt8 *bankStart = this->ramData + (this->bank * kGBMemoryBankSize);
+    UInt8 *bankStart = this->ramData + (this->bank * (kGBMemoryBankSize * 2));
 
-    return bankStart[address & (~kGBMemoryBankMask)];
+    return bankStart[address & (~0xA0)];
 }
 
 bool GBCartRAMOnInstall(GBCartRAM *this, GBGameboy *gameboy)

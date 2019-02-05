@@ -50,13 +50,13 @@ void __GBVideoRAMWrite(GBVideoRAM *this, UInt16 address, UInt8 byte)
     if (address < 0x9800) {
         // I dunno
     } else if (address < 0x9C00) {
-        UInt16 addr = address & (~(1 << 15));
-        fprintf(stderr, "note: wrote to background map 0. (0x%04X=0x%02X) [0x%04X]\n", address, byte, addr);
+        //UInt16 addr = address & (~(1 << 15));
+        //fprintf(stderr, "note: wrote to background map 0. (0x%04X=0x%02X) [0x%04X]\n", address, byte, addr);
     } else {
         //fprintf(stderr, "note: wrote to background map 1. (0x%04X=0x%02X)\n", address, byte);
     }
 
-    this->memory[address & (~(1 << 15))] = byte;
+    this->memory[address & (~0x8000)] = byte;
 }
 
 UInt8 __GBVideoRAMRead(GBVideoRAM *this, UInt16 address)
@@ -67,7 +67,7 @@ UInt8 __GBVideoRAMRead(GBVideoRAM *this, UInt16 address)
             return 0xFF;
     }
 
-    return this->memory[address & (~(1 << 15))];
+    return this->memory[address & (~0x8000)];
 }
 
 bool __GBVideoRAMOnInstall(GBVideoRAM *this, GBGameboy *gameboy)

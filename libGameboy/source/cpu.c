@@ -34,6 +34,7 @@ GBProcessor *GBProcessorCreate(void)
             return NULL;
         }
 
+        cpu->mmu->interruptControl = &cpu->state.interruptControl;
         cpu->state.mode = kGBProcessorModeOff;
 
         cpu->state.ime = false;

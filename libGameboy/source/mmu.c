@@ -91,10 +91,19 @@ void GBMemoryManagerDestroy(GBMemoryManager *this)
 
 void __GBMemoryManagerWrite(GBMemoryManager *this, UInt16 address, UInt8 byte)
 {
-    if (address > 0xFE00) {
+    if (address >= 0xFE00) {
         // high memory
-        if (!(~address))
+        if (address == 0xFFFF)
+        {
+            printf("Changed interrupt status:\n");
+            printf("VBlank:   %s\n", (byte & 0x01) ? "yes" : "no");
+            printf("LCD Stat: %s\n", (byte & 0x02) ? "yes" : "no");
+            printf("Timer:    %s\n", (byte & 0x04) ? "yes" : "no");
+            printf("Serial:   %s\n", (byte & 0x08) ? "yes" : "no");
+            printf("Joypad:   %s\n", (byte & 0x10) ? "yes" : "no");
+
             *this->interruptControl = byte;
+        }
 
         // Mask top 7 bits. Shift off bottom 5
         GBMemorySpace *space = this->highSpaces[(address & 0x01E0) >> 5];
@@ -112,7 +121,7 @@ UInt8 __GBMemoryManagerRead(GBMemoryManager *this, UInt16 address)
         return this->romSpace->read(this->romSpace, address);
     } else if (address > 0xFE00) {
         // high memory
-        if (!(~address))
+        if (address == 0xFFFF)
             return *this->interruptControl;
 
         // Mask top 7 bits. Shift off bottom 5

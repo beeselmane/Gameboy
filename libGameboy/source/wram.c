@@ -100,12 +100,12 @@ void GBWorkRAMDestroy(GBWorkRAM *this)
 
 void __GBWorkRAMWrite(GBWorkRAM *this, UInt16 address, UInt8 byte)
 {
-    this->memory[address & (~kGBMemoryBankMask)] = byte;
+    this->memory[address & (~0xC000)] = byte;
 }
 
 UInt8 __GBWorkRAMRead(GBWorkRAM *this, UInt16 address)
 {
-    return this->memory[address & (~kGBMemoryBankMask)];
+    return this->memory[address & (~0xC000)];
 }
 
 bool __GBWorkRAMOnInstall(GBWorkRAM *this, GBGameboy *gameboy)

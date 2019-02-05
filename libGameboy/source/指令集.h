@@ -598,7 +598,7 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
     })
 
 #define dec_r(code, reg)                                                    \
-    op_simple(code, "inc " #reg, {                                          \
+    op_simple(code, "dec " #reg, {                                          \
         UInt8 carry = cpu->state.f.c;                                       \
         SInt8 one = 1;                                                      \
                                                                             \
@@ -1258,10 +1258,10 @@ op_wait(0xF2, 1, "ld a, c(" dIO ")", {
     cpu->state.a = cpu->state.mdr;
 });
 
-op(0xF3, 1, "di", {
-    cpu->state.ime = false;
+op_simple(0xF3, "di", {
+    printf("Interrupts disabled.\n");
 
-    cpu->state.mode = kGBProcessorModeFetch;
+    cpu->state.ime = false;
 });
 
 udef(0xF4);
@@ -1310,6 +1310,8 @@ op_wait3(0xFA, 3, "ld a, (" d16 ")", {
 });
 
 op_simple(0xFB, "ei", {
+    printf("Interrupts enabled.\n");
+
     cpu->state.ime = true;
 });
 
