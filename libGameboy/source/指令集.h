@@ -546,11 +546,12 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
 
 #define rst(code, dst)                                                                  \
     op_wait2_stall(code, 1, "rst $" #dst, {                                             \
+        __GBProcessorWrite(cpu, cpu->state.sp - 1, cpu->state.pc >> 8);                 \
+    }, {                                                                                \
+        __GBProcessorWrite(cpu, cpu->state.sp - 2, cpu->state.pc & 0xFF);               \
+    }, {                                                                                \
         cpu->state.pc = dst;                                                            \
-    }, {                                                                                \
-        __GBProcessorRead(cpu, 0x0000);                                                 \
-    }, {                                                                                \
-        /* nothing */                                                                   \
+        cpu->state.sp -= 2;                                                             \
     })
 
 #pragma mark - Stack manipulation macros
@@ -984,6 +985,9 @@ ld_hl(0x75, l);
 
 op(0x76, 1, "halt", {
     cpu->state.mode = kGBProcessorModeHalted;
+
+    cpu->state.enableIME = cpu->state.ime;
+    cpu->state.ime = true;
 });
 
 ld_hl(0x77, a);
@@ -1148,6 +1152,8 @@ ret(0xD8, "c", cpu->state.f.c);
 
 op_wait2_stall(0xD9, 1, "reti", {
     __GBProcessorRead(cpu, cpu->state.sp + 0);
+
+    cpu->state.enableIME = true;
 }, {
     cpu->state.pc = cpu->state.mdr;
 
@@ -1155,8 +1161,6 @@ op_wait2_stall(0xD9, 1, "reti", {
 }, {
     cpu->state.pc |= (cpu->state.mdr << 8);
     cpu->state.sp += 2;
-
-    cpu->state.ime = true;
 });
 
 jmp(0xDA, "c, ", cpu->state.f.c);
@@ -1312,7 +1316,7 @@ op_wait3(0xFA, 3, "ld a, (" d16 ")", {
 op_simple(0xFB, "ei", {
     printf("Interrupts enabled.\n");
 
-    cpu->state.ime = true;
+    cpu->state.enableIME = true;
 });
 
 udef(0xFC);

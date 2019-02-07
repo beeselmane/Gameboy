@@ -3,6 +3,7 @@
 
 #include "base.h"
 #include "mmu.h"
+#include "ic.h"
 
 #define GBRegisterPair(h, l)    \
     union {                     \
@@ -18,17 +19,18 @@
 struct __GBProcessor;
 
 enum {
-    kGBProcessorModeHalted     = -2,
-    kGBProcessorModeStopped    = -1,
-    kGBProcessorModeOff        =  0,
-    kGBProcessorModeFetch      =  1,
-    kGBProcessorModePrefix     =  2,
-    kGBProcessorModeStalled    =  3,
-    kGBProcessorModeRun        =  4,
-    kGBProcessorModeWait1      =  5,
-    kGBProcessorModeWait2      =  6,
-    kGBProcessorModeWait3      =  7,
-    kGBProcessorModeWait4      =  8
+    kGBProcessorModeHalted      = -2,
+    kGBProcessorModeStopped     = -1,
+    kGBProcessorModeOff         =  0,
+    kGBProcessorModeFetch       =  1,
+    kGBProcessorModePrefix      =  2,
+    kGBProcessorModeInterrupted =  3,
+    kGBProcessorModeStalled     =  4,
+    kGBProcessorModeRun         =  5,
+    kGBProcessorModeWait1       =  6,
+    kGBProcessorModeWait2       =  7,
+    kGBProcessorModeWait3       =  8,
+    kGBProcessorModeWait4       =  9
 };
 
 typedef struct __GBProcessorOP {
@@ -39,10 +41,12 @@ typedef struct __GBProcessorOP {
 } GBProcessorOP;
 
 typedef struct __GBProcessor {
+    GBInterruptController *ic;
     GBMemoryManager *mmu;
 
     struct __GBProcessorState {
-        UInt8 interruptControl;
+        bool willInterrupt;
+        bool enableIME;
         bool ime;
         UInt8 a;
 
@@ -67,12 +71,11 @@ typedef struct __GBProcessor {
         UInt8 mdr;
         bool accessed;
 
-        UInt8 op;
-        bool prefix;
-
         UInt16 data; // misc. data for some instructions
-        SInt8 mode;
+        bool prefix;
+        UInt8 op;
 
+        SInt8 mode;
         bool bug;
     } state;
 

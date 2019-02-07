@@ -12,6 +12,7 @@
 #include "lcd.h"
 #include "wram.h"
 #include "clock.h"
+#include "gamepad.h"
 
 // 0xFF00 --> input status
 //
@@ -28,6 +29,7 @@ struct __GBGameboy {
     GBWorkRAM *wram;
     GBVideoRAM *vram;
     GBGraphicsDriver *driver;
+    GBGamepad *gamepad;
     GBClock *clock;
 
     GBCartridge *cart;

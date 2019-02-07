@@ -101,7 +101,7 @@ UInt8 op = 0x00;
         case kGBProcessorModeWait4:   mode = @"Wait 4";         break;
     }
 
-    [_boxTicks setStringValue:[NSString stringWithFormat:@"%llu", gameboy->clock->ticks]];
+    [_boxTicks setStringValue:[NSString stringWithFormat:@"%llu", gameboy->clock->internalTick]];
     [_boxMode setStringValue:mode];
 
     [_boxIME setStringValue:[NSString stringWithFormat:@"%d", gameboy->cpu->state.ime]];
@@ -117,6 +117,25 @@ UInt8 op = 0x00;
     [_boxNF setStringValue:[NSString stringWithFormat:@"%d", gameboy->cpu->state.f.n]];
     [_boxHF setStringValue:[NSString stringWithFormat:@"%d", gameboy->cpu->state.f.h]];
     [_boxCF setStringValue:[NSString stringWithFormat:@"%d", gameboy->cpu->state.f.c]];
+
+    bool ie[5] = {
+        gameboy->cpu->ic->interruptControl & 0x01,
+        gameboy->cpu->ic->interruptControl & 0x02,
+        gameboy->cpu->ic->interruptControl & 0x04,
+        gameboy->cpu->ic->interruptControl & 0x08,
+        gameboy->cpu->ic->interruptControl & 0x10,
+    };
+
+    bool ifl[5] = {
+        gameboy->cpu->ic->interruptFlagPort->value & 0x01,
+        gameboy->cpu->ic->interruptFlagPort->value & 0x02,
+        gameboy->cpu->ic->interruptFlagPort->value & 0x04,
+        gameboy->cpu->ic->interruptFlagPort->value & 0x08,
+        gameboy->cpu->ic->interruptFlagPort->value & 0x10,
+    };
+
+    [_boxIF setStringValue:[NSString stringWithFormat:@"%d%d%d%d%d", ifl[4], ifl[3], ifl[2], ifl[1], ifl[0]]];
+    [_boxIE setStringValue:[NSString stringWithFormat:@"%d%d%d%d%d", ie[4], ie[3], ie[2], ie[1], ie[0]]];
 
     if (gameboy->cpu->state.mode == kGBProcessorModeFetch)
     {
@@ -219,16 +238,20 @@ UInt8 op = 0x00;
 {
     NSInteger steps = [[_ticksBox stringValue] integerValue];
 
-    for (NSInteger i = 0; i < steps; )
-    {
-        GBClockTick(gameboy->clock);
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^() {
+        for (NSInteger i = 0; i < steps; )
+        {
+            GBClockTick(gameboy->clock);
 
-        if (gameboy->cpu->state.mode == kGBProcessorModeFetch)
-            i++;
-    }
+            if (gameboy->cpu->state.mode == kGBProcessorModeFetch)
+                i++;
+        }
 
-    [self setBoxes];
-    [self image:sender];
+        dispatch_async(dispatch_get_main_queue(), ^() {
+            [self setBoxes];
+            [self image:sender];
+        });
+    });
 }
 
 // 0xC bytes from 0x2AF7 --> 0xFFB6
@@ -238,16 +261,20 @@ UInt8 op = 0x00;
 {
     NSInteger breakpoint = [[_breakpointBox stringValue] integerValue];
 
-    for ( ; ; )
-    {
-        GBClockTick(gameboy->clock);
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^() {
+        for ( ; ; )
+        {
+            GBClockTick(gameboy->clock);
 
-        if (gameboy->cpu->state.pc == breakpoint && gameboy->cpu->state.mode == kGBProcessorModeFetch)
-            break;
-    }
+            if (gameboy->cpu->state.pc == breakpoint && gameboy->cpu->state.mode == kGBProcessorModeFetch)
+                break;
+        }
 
-    [self setBoxes];
-    [self image:sender];
+        dispatch_async(dispatch_get_main_queue(), ^() {
+            [self setBoxes];
+            [self image:sender];
+        });
+    });
 }
 
 - (NSBitmapImageRep *) makeBitmapImageOfWidth:(UInt32)width height:(UInt32) height

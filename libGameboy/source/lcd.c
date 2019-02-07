@@ -2,6 +2,7 @@
 #include "gameboy.h"
 #include "mmio.h"
 #include "mmu.h"
+#include "ic.h"
 
 #ifdef __APPLE__
     #include <Security/Security.h>
@@ -364,6 +365,7 @@ void GBGraphicsDriverDestroy(GBGraphicsDriver *this)
 
 bool __GBGraphicsDriverInstall(GBGraphicsDriver *this, struct __GBGameboy *gameboy)
 {
+    this->interruptRequest = &gameboy->cpu->ic->interruptFlagPort->value;
     this->oam->install(this->oam, gameboy);
     this->vram = gameboy->vram;
 
@@ -392,6 +394,34 @@ void __GBGraphicsDriverSetMode(GBGraphicsDriver *this, UInt8 mode)
     this->status->value |= mode;
 
     this->driverMode = mode;
+
+    switch (mode)
+    {
+        case kGBDriverStateVBlank: {
+            if (this->status->value & kGBVideoInterruptVBlank)
+                (*this->interruptRequest) |= (1 << kGBInterruptVBlank);
+        } break;
+        case kGBDriverStateHBlank: {
+            if (this->status->value & kGBVideoInterruptHBlank)
+                (*this->interruptRequest) |= (1 << kGBInterruptLCDStat);
+        } break;
+        case kGBDriverStateSpriteSearch: {
+            if (this->status->value & kGBVideoInterruptSpriteSearch)
+                (*this->interruptRequest) |= (1 << kGBInterruptLCDStat);
+        }
+    }
+}
+
+void __GBGraphicsDriverCheckCoincidence(GBGraphicsDriver *this)
+{
+    if (this->coordinate->value == this->compare->value) {
+        this->status->value |= kGBVideoStatMatchFlag;
+
+        if (this->status->value & kGBVideoInterruptOnLine)
+            (*this->interruptRequest) |= (1 << kGBInterruptLCDStat);
+    } else {
+        this->status->value &= ~kGBVideoStatMatchFlag;
+    }
 }
 
 void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
@@ -414,13 +444,14 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
 
             // Do a sprite every two ticks
             // This isn't *really* important, but I like it...
+            // Note: This is a result of the fact that video RAM is clocked at 2 MHz
             if (this->driverModeTicks % 2)
             {
-                if (this->lineSpriteCount == 10)
+                if (this->lineSpriteCount == 10 || !(this->control->value & 1))
                     break;
 
                 GBSpriteDescriptor *sprite = &this->oam->memory[this->spriteIndex];
-                UInt8 spriteHeight = ((this->control->value >> 2) & 1) ? 16 : 8;
+                UInt8 spriteHeight = (this->control->value & 0x2) ? 16 : 8;
                 UInt8 spriteWidth = 8;
 
                 UInt8 spriteY = sprite->y + spriteHeight;
@@ -453,6 +484,8 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                 this->coordinate->value++;
                 this->fifoPosition = 0;
 
+                __GBGraphicsDriverCheckCoincidence(this);
+
                 if (this->coordinate->value >= kGBScreenHeight) {
                     __GBGraphicsDriverSetMode(this, kGBDriverStateVBlank);
                 } else {
@@ -483,9 +516,9 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
             {
                 __GBGraphicsDriverSetMode(this, kGBDriverStateSpriteSearch);
                 this->coordinate->value = 0;
-
-                return;
             }
+
+            __GBGraphicsDriverCheckCoincidence(this);
         } break;
         default: fprintf(stderr, "Emulator Error: Invalid LCD driver state '0x%02X'.\n", this->driverMode); break;
     }

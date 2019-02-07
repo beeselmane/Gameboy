@@ -28,11 +28,17 @@ GBGameboy *GBGameboyCreate(void)
         gameboy->vram = GBVideoRAMCreate();
         success &= !!gameboy->vram;
 
+        gameboy->gamepad = GBGamepadCreate();
+        success &= !!gameboy->gamepad;
+
         gameboy->clock = GBClockCreate();
         success &= !!gameboy->clock;
 
         if (!success)
         {
+            if (gameboy->gamepad)
+                free(gameboy->gamepad);
+
             if (gameboy->wram)
                 GBWorkRAMDestroy(gameboy->wram);
 
@@ -57,6 +63,8 @@ GBGameboy *GBGameboyCreate(void)
         installed &= gameboy->wram->install(gameboy->wram, gameboy);
         installed &= gameboy->vram->install(gameboy->vram, gameboy);
         installed &= gameboy->driver->install(gameboy->driver, gameboy);
+        installed &= gameboy->gamepad->install(gameboy->gamepad, gameboy);
+        installed &= gameboy->cpu->ic->install(gameboy->cpu->ic, gameboy);
         installed &= gameboy->clock->install(gameboy->clock, gameboy);
 
         if (!installed)

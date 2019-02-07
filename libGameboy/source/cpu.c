@@ -25,18 +25,30 @@ GBProcessor *GBProcessorCreate(void)
 
     if (cpu)
     {
-        cpu->mmu = GBMemoryManagerCreate();
+        cpu->ic = GBInterruptControllerCreate(cpu);
 
-        if (!cpu->mmu)
+        if (!cpu->ic)
         {
             free(cpu);
 
             return NULL;
         }
 
-        cpu->mmu->interruptControl = &cpu->state.interruptControl;
+        cpu->mmu = GBMemoryManagerCreate();
+
+        if (!cpu->mmu)
+        {
+            GBInterruptControllerDestroy(cpu->ic);
+            free(cpu);
+
+            return NULL;
+        }
+
+        cpu->mmu->interruptControl = &cpu->ic->interruptControl;
         cpu->state.mode = kGBProcessorModeOff;
 
+        cpu->state.willInterrupt = false;
+        cpu->state.enableIME = false;
         cpu->state.ime = false;
         cpu->state.a = 0;
 
@@ -52,9 +64,10 @@ GBProcessor *GBProcessorCreate(void)
         cpu->state.mdr = 0;
 
         cpu->state.prefix = false;
+        cpu->state.data = 0;
         cpu->state.op = 0;
 
-        cpu->state.data = 0;
+        cpu->state.bug = false;
 
         memcpy(cpu->decode_prefix, gGBInstructionSetCB, 0x100 * sizeof(GBProcessorOP *));
         memcpy(cpu->decode, gGBInstructionSet, 0x100 * sizeof(GBProcessorOP *));
@@ -89,14 +102,51 @@ void __GBProcessorTick(GBProcessor *this, UInt64 tick)
 {
     switch (this->state.mode)
     {
-        case kGBProcessorModeHalted:
-            break;
+        case kGBProcessorModeHalted: {
+            if (GBInterruptControllerCheck(this->ic))
+            {
+                if (this->state.enableIME) {
+                    this->state.mode = kGBProcessorModeInterrupted;
+                    this->state.data = 0;
+
+                    return;
+                } else {
+                    this->state.mode = kGBProcessorModeFetch;
+                }
+            }
+        } break;
         case kGBProcessorModeStopped:
         case kGBProcessorModeOff:
             return;
         case kGBProcessorModeFetch: {
-            __GBProcessorRead(this, this->state.pc++);
+            if (this->state.enableIME)
+            {
+                this->state.enableIME = false;
+                this->state.ime = true;
+            }
 
+            if (this->state.willInterrupt)
+            {
+                this->state.willInterrupt = false;
+
+                if (!GBInterruptControllerCheck(this->ic)) {
+                    this->ic->interruptPending = false;
+                } else {
+                    this->state.mode = kGBProcessorModeInterrupted;
+
+                    printf("CPU Interrupted! Jump to 0x%04X\n", this->ic->destination);
+
+                    // We use this to track stalls
+                    this->state.data = 0;
+
+                    return;
+                }
+            }
+
+            if (this->ic->interruptPending)
+                this->state.willInterrupt = true;
+
+            __GBProcessorRead(this, this->state.pc++);
             this->state.mode = kGBProcessorModeRun;
         } break;
         case kGBProcessorModePrefix: {
@@ -105,6 +155,62 @@ void __GBProcessorTick(GBProcessor *this, UInt64 tick)
                 this->state.op = this->state.mdr;
 
                 GBDispatchOP(this);
+            }
+        } break;
+        case kGBProcessorModeInterrupted: {
+            if (!GBInterruptControllerCheck(this->ic))
+            {
+                printf("Interrupt Cancelled.\n");
+
+                this->state.mode = kGBProcessorModeFetch;
+                this->ic->interruptPending = false;
+
+                return;
+            }
+
+            switch (this->state.data)
+            {
+                case 0: {
+                    // Store high byte of PC
+                    __GBProcessorWrite(this, this->state.sp - 1, this->state.pc >> 8);
+
+                    this->state.data++;
+                } break;
+                case 1: {
+                    // Store low byte of PC
+                    if (this->state.accessed)
+                    {
+                        __GBProcessorWrite(this, this->state.sp - 1, this->state.pc & 0xFF);
+
+                        this->state.data++;
+                    }
+                } break;
+                case 2: {
+                    // Stall once (Also set PC to interrupt vector)
+                    if (this->state.accessed)
+                    {
+                        __GBProcessorRead(this, 0x0000);
+
+                        this->state.pc = this->ic->destination;
+                        this->state.sp -= 2;
+
+                        this->state.data++;
+                    }
+                } break;
+                case 3: {
+                    // Stall again (Also reset interrupt controller)
+                    if (this->state.accessed)
+                    {
+                        __GBProcessorRead(this, 0x0000);
+
+                        this->ic->interruptPending = false;
+                        this->state.data++;
+                    }
+                } break;
+                case 4: {
+                    if (this->state.accessed)
+                        this->state.mode = kGBProcessorModeFetch;
+                } break;
             }
         } break;
         case kGBProcessorModeStalled: {
@@ -136,6 +242,4 @@ void __GBProcessorTick(GBProcessor *this, UInt64 tick)
             GBDispatchOP(this);
         } break;
     }
-
-    // check for interrupt here
 }

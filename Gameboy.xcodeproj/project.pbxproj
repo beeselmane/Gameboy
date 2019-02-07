@@ -18,7 +18,8 @@
 		8B4C28D422060F09005FE36A /* lcd.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B4C28D222060EFD005FE36A /* lcd.c */; };
 		8B4C28D622064014005FE36A /* tetris.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B4C28D522064014005FE36A /* tetris.gb */; };
 		8B659BD4220821D6002C9268 /* GBImageView.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B659BD3220821D6002C9268 /* GBImageView.m */; };
-		8BA00B232203F584009CE00B /* intr.c in Sources */ = {isa = PBXBuildFile; fileRef = 8BA00B222203F584009CE00B /* intr.c */; };
+		8BA00B232203F584009CE00B /* ic.c in Sources */ = {isa = PBXBuildFile; fileRef = 8BA00B222203F584009CE00B /* ic.c */; };
+		8BEDFBA8220C8C7D00F3F598 /* gamepad.c in Sources */ = {isa = PBXBuildFile; fileRef = 8BEDFBA6220C876900F3F598 /* gamepad.c */; };
 		8BF79B9522058DD5003CAB0D /* bios.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FB21F5690600FA2526 /* bios.c */; };
 		8BF79B9622058DD5003CAB0D /* mmio.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FD21F5701D00FA2526 /* mmio.c */; };
 		8BF79B9722058DD5003CAB0D /* mmu.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FF21F5766400FA2526 /* mmu.c */; };
@@ -78,8 +79,9 @@
 		8B4C28D522064014005FE36A /* tetris.gb */ = {isa = PBXFileReference; lastKnownFileType = file; name = tetris.gb; path = games/tetris.gb; sourceTree = "<group>"; };
 		8B659BD2220821D6002C9268 /* GBImageView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBImageView.h; sourceTree = "<group>"; };
 		8B659BD3220821D6002C9268 /* GBImageView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBImageView.m; sourceTree = "<group>"; };
-		8BA00B212203F490009CE00B /* intr.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = intr.h; sourceTree = "<group>"; };
-		8BA00B222203F584009CE00B /* intr.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = intr.c; sourceTree = "<group>"; };
+		8BA00B212203F490009CE00B /* ic.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ic.h; sourceTree = "<group>"; };
+		8BA00B222203F584009CE00B /* ic.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ic.c; sourceTree = "<group>"; };
+		8BEDFBA6220C876900F3F598 /* gamepad.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = gamepad.c; sourceTree = "<group>"; };
 		8BF79B9322058A55003CAB0D /* clock.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = clock.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -160,10 +162,11 @@
 				8B3E99FF21F5766400FA2526 /* mmu.c */,
 				8B3E9A0121F585D800FA2526 /* wram.c */,
 				8B430D1921FBD80000DE5302 /* cart.c */,
-				8BA00B222203F584009CE00B /* intr.c */,
+				8BA00B222203F584009CE00B /* ic.c */,
 				8B430D1B21FE787000DE5302 /* cpu.c */,
 				8B430D1D21FE7DC100DE5302 /* 指令集.h */,
 				8B430D252201F5FA00DE5302 /* disasm.c */,
+				8BEDFBA6220C876900F3F598 /* gamepad.c */,
 			);
 			path = source;
 			sourceTree = "<group>";
@@ -185,7 +188,7 @@
 				8B430D22220161ED00DE5302 /* dma.h */,
 				8B430D232201627000DE5302 /* gamepad.h */,
 				8B430D242201F54800DE5302 /* disasm.h */,
-				8BA00B212203F490009CE00B /* intr.h */,
+				8BA00B212203F490009CE00B /* ic.h */,
 			);
 			path = headers;
 			sourceTree = "<group>";
@@ -311,6 +314,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8BEDFBA8220C8C7D00F3F598 /* gamepad.c in Sources */,
 				8B4C28D422060F09005FE36A /* lcd.c in Sources */,
 				8BF79B9B22058DD9003CAB0D /* disasm.c in Sources */,
 				8BF79B9C22058DD9003CAB0D /* clock.c in Sources */,
@@ -320,7 +324,7 @@
 				8BF79B9822058DD5003CAB0D /* wram.c in Sources */,
 				8BF79B9922058DD5003CAB0D /* cart.c in Sources */,
 				8BF79B9A22058DD5003CAB0D /* cpu.c in Sources */,
-				8BA00B232203F584009CE00B /* intr.c in Sources */,
+				8BA00B232203F584009CE00B /* ic.c in Sources */,
 				8B3E99E921F5342000FA2526 /* gameboy.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

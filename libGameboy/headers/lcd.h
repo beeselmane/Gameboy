@@ -141,18 +141,18 @@ GBVideoPortGeneric *GBVideoPortGenericCreate(UInt16 address);
 
 #pragma mark - LCD Driver
 
-#define kGBColorWhite       0xFFFFFF
-#define kGBColorLightGray   0xBBBBBB
-#define kGBColorDarkGray    0x555555
-#define kGBColorBlack       0x000000
+#define kGBColorWhite                   0xFFFFFF
+#define kGBColorLightGray               0xBBBBBB
+#define kGBColorDarkGray                0x555555
+#define kGBColorBlack                   0x000000
 
-#define kGBFullHeight       256
-#define kGBFullWidth        256
+#define kGBFullHeight                   256
+#define kGBFullWidth                    256
 
-#define kGBScreenHeight     144
-#define kGBScreenWidth      160
+#define kGBScreenHeight                 144
+#define kGBScreenWidth                  160
 
-#define kGBCoordinateMaxY   153
+#define kGBCoordinateMaxY               153
 
 // 1 sprite every 2 cycles
 #define kGBDriverSpriteSearchClocks     80
@@ -161,6 +161,13 @@ GBVideoPortGeneric *GBVideoPortGenericCreate(UInt16 address);
 // Just stall... yey
 //#define kGBDriverVerticalClocks         1540
 #define kGBDriverVerticalClockUpdate    456
+
+#define kGBVideoInterruptOnLine         (1 << 6)
+#define kGBVideoInterruptSpriteSearch   (1 << 5)
+#define kGBVideoInterruptVBlank         (1 << 4)
+#define kGBVideoInterruptHBlank         (1 << 3)
+
+#define kGBVideoStatMatchFlag           (1 << 2)
 
 enum {
     kGBDriverStateSpriteSearch      = 2,
@@ -195,6 +202,7 @@ typedef struct __GBGraphicsDriver {
     GBVideoRAM *vram;
     GBSpriteRAM *oam;
 
+    UInt8 *interruptRequest;
     bool displayOn;
 
     UInt32 screenData[kGBScreenHeight * kGBScreenWidth];

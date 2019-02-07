@@ -31,6 +31,8 @@
 @property (weak) IBOutlet NSTextField *boxCF;
 @property (weak) IBOutlet NSTextField *breakpointBox;
 @property (weak) IBOutlet NSTextField *boxPrefix;
+@property (weak) IBOutlet NSTextField *boxIE;
+@property (weak) IBOutlet NSTextField *boxIF;
 
 @property (weak) IBOutlet NSImageView *bgImage1;
 @property (weak) IBOutlet NSImageView *paletteImage;
