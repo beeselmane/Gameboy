@@ -41,7 +41,7 @@ void GBHighRAMDestroy(GBHighRAM *this)
 
 void __GBHighRAMWrite(GBHighRAM *this, UInt16 address, UInt8 byte)
 {
-    UInt16 addr = address & (~kGBHighRAMStart);
+    /*UInt16 addr = address & (~kGBHighRAMStart);
 
     // 0xFA --> 0xFFA6
     // 0x25 --> 0xFFE1
@@ -50,7 +50,7 @@ void __GBHighRAMWrite(GBHighRAM *this, UInt16 address, UInt8 byte)
         fprintf(stdout, "HRAM: Writing 0x%02X to 0x%04X (0x%04X)\n", byte, address, addr);
 
     if (address == 0xFFE1)
-        fprintf(stdout, "HRAM: Changing 0x%04X from 0x%02X to 0x%02X\n", address, this->memory[addr], byte);
+        fprintf(stdout, "HRAM: Changing 0x%04X from 0x%02X to 0x%02X\n", address, this->memory[addr], byte);*/
 
     //fprintf(stdout, "HRAM: Writing 0x%02X to 0x%04X (0x%04X)\n", byte, address, addr);
 

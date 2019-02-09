@@ -128,7 +128,7 @@ void __GBProcessorTick(GBProcessor *this, UInt64 tick)
             {
                 this->state.mode = kGBProcessorModeInterrupted;
 
-                printf("CPU Interrupted! Jump to 0x%04X\n", this->ic->destination);
+                //printf("CPU Interrupted! Jump to 0x%04X\n", this->ic->destination);
 
                 // We use this to track stalls
                 this->state.data = 0;

@@ -245,7 +245,7 @@ void __GBIOWrite(GBIORegister *this, UInt8 byte)
     GBGameboyPowerOn(gameboy);
 
     // 09-op r,r
-    NSData *game = [NSData dataWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"11-op a,(hl)" ofType:@"gb"]];
+    NSData *game = [NSData dataWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"07-jr,jp,call,ret,rst" ofType:@"gb"]];
     if (!game) exit(EXIT_FAILURE);
 
     GBCartridge *cart = GBCartridgeCreate((UInt8 *)[game bytes], (UInt32)[game length]);
@@ -273,17 +273,17 @@ void __GBIOWrite(GBIORegister *this, UInt8 byte)
 // 0xC31D (push bc in pop af test)
 // Fails on second test with 0x1301 because 0x01 & 0xF0 != 0x01
 
-// 01 - Failed (pop af, daa)
+// 01 - Passed, yay, credit to this thread: http://forums.nesdev.com/viewtopic.php?f=20&t=15944
 // 02 - Failed (timer doesn't work)
 // 03 - Failed (E8 F8)
 // 04 - Passed
 // 05 - Passed
 // 06 - Passed
-// 07 - Failed? (18 20 28 30 38 C2 C3 CA D2 DA C4 CC CD D4 DC C0 C8 C9 D0 D8 D9)
+// 07 - Passed
 // 08 - Passed
-// 09 - Failed (B8 B9 BA BB BC BD 90 91 92 93 94 95 98 99 9A 9B 9C 9D 9F 05 0D 15 1D 25 2D 3D)
+// 09 - Failed (B8 B9 BA BB BC BD 90 91 92 93 94 95 98 99 9A 9B 9C 9D 9F 05 0D 15 1D 25 2D 3D) [Everything that use __ALUSub8; Everything else passed]
 // 10 - Passed
-// 11 - Failed (BE 96 9E 35 ??)
+// 11 - Failed (BE 96 9E 35) [Again, just things dependant on __ALUSub8]
 
 // 0xFEA0 - 0xFEFF returns 0
 

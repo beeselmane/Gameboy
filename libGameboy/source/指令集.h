@@ -114,7 +114,7 @@ static __attribute__((always_inline)) void __ALUSub8(GBProcessor *cpu, UInt8 *to
 
     cpu->state.f.z = !result;
     cpu->state.f.n = 1;
-    cpu->state.f.h = !!((((*to) & 0x0F) + ((~from + 1) & 0x0F)) & 0x80);
+    cpu->state.f.h = !!((((*to) & 0x0F) + ((~from + 1) & 0x0F)) & 0x08);
     cpu->state.f.c = !!(result & 0x80);
 
     (*to) = result;
@@ -159,18 +159,14 @@ static __attribute__((always_inline)) void __ALUCP8(GBProcessor *cpu, UInt8 *to,
     *to = initial;
 }
 
-static __attribute__((always_inline)) void __ALURotateRight(UInt8 *reg, UInt8 amount)
+static __attribute__((always_inline)) void __ALURotateRight(UInt8 *reg)
 {
-    __asm__ ("rorb %1, %0"
-             : "+mq" (*reg)
-             : "cI"  (amount));
+    (*reg) = ((*reg) << 7) | ((*reg) >> 1);
 }
 
-static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amount)
+static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg)
 {
-    __asm__ ("rolb %1, %0"
-             : "+mq" (*reg)
-             : "cI"  (amount));
+    (*reg) = ((*reg) >> 7) | ((*reg) << 1);
 }
 
 #endif /* !defined(kGBDisassembler) */
@@ -388,7 +384,7 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
 
 #define op_pre_hl(code, str, impl)                                          \
     op_pre(code, 1, str, {                                                  \
-        if (cpu->state.mode == kGBProcessorModeRun) {                       \
+        if (cpu->state.mode == kGBProcessorModePrefix) {                    \
             __GBProcessorRead(cpu, cpu->state.hl);                          \
                                                                             \
             cpu->state.mode = kGBProcessorModeWait1;                        \
@@ -695,7 +691,7 @@ dec_r(0x05, b);
 ld_m(0x06, b);
 
 op_simple(0x07, "rcla", {
-    __ALURotateLeft(&cpu->state.a, 1);
+    __ALURotateLeft(&cpu->state.a);
 
     cpu->state.f.z = 0;
     cpu->state.f.n = 0;
@@ -761,7 +757,7 @@ op_simple(0x0F, "rrca", {
     cpu->state.f.n = 0;
     cpu->state.f.z = 0;
 
-    __ALURotateRight(&cpu->state.a, 1);
+    __ALURotateRight(&cpu->state.a);
 });
 
 op(0x10, 2, "stop 0", {
@@ -834,10 +830,26 @@ dec_r(0x25, h);
 
 ld_m(0x26, h);
 
-op(0x27, 1, "daa", {
-    fprintf(stderr, "CPU: Someone wants DAA...... NO.\n");
+op_simple(0x27, "daa", {
+    if (cpu->state.f.n) {
+        if (cpu->state.f.c)
+            cpu->state.a -= 0x60;
 
-    // :(
+        if (cpu->state.f.h)
+            cpu->state.a -= 0x06;
+    } else {
+        if (cpu->state.f.c || cpu->state.a > 0x99)
+        {
+            cpu->state.a += 0x60;
+            cpu->state.f.c = 1;
+        }
+
+        if (cpu->state.f.h || (cpu->state.a & 0x0F) > 0x09)
+            cpu->state.a += 0x06;
+    }
+
+    cpu->state.f.z = !cpu->state.a;
+    cpu->state.f.h = 0;
 });
 
 jr(0x28, "z, ", cpu->state.f.z);
@@ -1162,12 +1174,6 @@ udef(0xD3);
 call(0xD4, "nc, ", !cpu->state.f.c);
 push(0xD5, de);
 
-// 0xC05A
-// 0xFF80 -- checksum address
-
-// 0xFFFFFFFF crc 0x30
-// 0x0B2420DE
-
 op_arg(0xD6, "sub " d8, {
     __ALUSub8(cpu, &cpu->state.a, cpu->state.mdr, 0);
 });
@@ -1268,8 +1274,6 @@ op_wait2(0xF0, 2, "ld a, " d8 "(" dIO ")", {
     cpu->state.a = cpu->state.mdr;
 });
 
-// 0xCE47
-
 op_wait2_stall(0xF1, 1, "pop af", {
     __GBProcessorRead(cpu, cpu->state.sp + 0);
 }, {
@@ -1354,7 +1358,7 @@ rst(0xFF, 0x38);
 
 #define rlc(code, reg)                                                      \
     op_pre_simple(code, "rlc " #reg, {                                      \
-        __ALURotateLeft(&cpu->state.reg, 1);                                \
+        __ALURotateLeft(&cpu->state.reg);                                   \
                                                                             \
         cpu->state.f.z = !cpu->state.reg;                                   \
         cpu->state.f.n = 0;                                                 \
@@ -1364,7 +1368,7 @@ rst(0xFF, 0x38);
 
 #define rlc_hl(code)                                                        \
     op_pre_hl(code, "rlc (hl)", {                                           \
-        __ALURotateLeft(&cpu->state.mdr, 1);                                \
+        __ALURotateLeft(&cpu->state.mdr);                                   \
                                                                             \
         cpu->state.f.z = !cpu->state.mdr;                                   \
         cpu->state.f.n = 0;                                                 \
@@ -1379,17 +1383,17 @@ rst(0xFF, 0x38);
         cpu->state.f.h = 0;                                                 \
         cpu->state.f.c = cpu->state.reg & 1;                                \
                                                                             \
-        __ALURotateRight(&cpu->state.reg, 1);                               \
+        __ALURotateRight(&cpu->state.reg);                                  \
     })
 
 #define rrc_hl(code)                                                        \
-    op_pre_simple(code, "rrc (hl)", {                                       \
+    op_pre_hl(code, "rrc (hl)", {                                           \
         cpu->state.f.z = !cpu->state.mdr;                                   \
         cpu->state.f.n = 0;                                                 \
         cpu->state.f.h = 0;                                                 \
         cpu->state.f.c = cpu->state.mdr & 1;                                \
                                                                             \
-        __ALURotateRight(&cpu->state.mdr, 1);                               \
+        __ALURotateRight(&cpu->state.mdr);                                  \
     })
 
 #define rl(code, reg)                                                       \
@@ -1478,7 +1482,7 @@ rst(0xFF, 0x38);
         cpu->state.f.c = cpu->state.mdr & 1;                                \
                                                                             \
         cpu->state.mdr >>= 1;                                               \
-        cpu->state.mdr |= (cpu->state.mdr >> 6);                            \
+        cpu->state.mdr |= (cpu->state.mdr & 0x40) << 1;                     \
         cpu->state.f.z = !cpu->state.mdr;                                   \
     })
 
@@ -1493,7 +1497,7 @@ rst(0xFF, 0x38);
     })
 
 #define swap_hl(code)                                                       \
-    op_pre_simple(code, "swap (hl)", {                                      \
+    op_pre_hl(code, "swap (hl)", {                                          \
         cpu->state.mdr = (cpu->state.mdr >> 4) | (cpu->state.mdr << 4);     \
                                                                             \
         cpu->state.f.z = !cpu->state.mdr;                                   \
