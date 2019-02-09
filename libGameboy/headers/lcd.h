@@ -154,12 +154,9 @@ GBVideoPortGeneric *GBVideoPortGenericCreate(UInt16 address);
 
 #define kGBCoordinateMaxY               153
 
-// 1 sprite every 2 cycles
 #define kGBDriverSpriteSearchClocks     80
-// Depends on switches and such... split into fetch/write and hblank
 #define kGBDriverHorizonalClocks        376
-// Just stall... yey
-//#define kGBDriverVerticalClocks         1540
+//#define kGBDriverVerticalClocks         4560
 #define kGBDriverVerticalClockUpdate    456
 
 #define kGBVideoInterruptOnLine         (1 << 6)

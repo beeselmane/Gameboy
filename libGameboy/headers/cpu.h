@@ -45,7 +45,6 @@ typedef struct __GBProcessor {
     GBMemoryManager *mmu;
 
     struct __GBProcessorState {
-        bool willInterrupt;
         bool enableIME;
         bool ime;
         UInt8 a;
@@ -64,6 +63,7 @@ typedef struct __GBProcessor {
                 UInt8 n:1;
                 UInt8 z:1;
             };
+
             UInt8 reg;
         } f;
 

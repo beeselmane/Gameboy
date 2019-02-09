@@ -47,6 +47,9 @@ UInt8 op = 0x00;
 @interface GBAppDelegate ()
 
 @property (weak) IBOutlet NSWindow *window;
+@property (atomic) BOOL breakTriggered;
+
+- (UInt16) hexValue:(NSTextField *)textField;
 
 @end
 
@@ -179,8 +182,36 @@ UInt8 op = 0x00;
     }
 }
 
+GBIORegister *ff01, *ff02;
+
+void __GBIOWrite(GBIORegister *this, UInt8 byte)
+{
+    if (byte == 0x81)
+        fprintf(stdout, "%c", ff01->value);
+}
+
+- (void) tryThing
+{
+    ff01 = malloc(sizeof(GBIORegister));
+    ff02 = malloc(sizeof(GBIORegister));
+
+    ff01->address = 0xFF01;
+
+    ff01->write = __GBIORegisterSimpleWrite;
+    ff01->read = __GBIORegisterSimpleRead;
+
+    ff02->address = 0xFF02;
+
+    ff02->read = __GBIORegisterSimpleRead;
+    ff02->write = __GBIOWrite;
+
+    GBIOMapperInstallPort(gameboy->mmio, ff02);
+    GBIOMapperInstallPort(gameboy->mmio, ff01);
+}
+
 - (void) applicationDidFinishLaunching:(NSNotification *)notification
 {
+    [self setBreakTriggered:NO];
     UInt32 count;
 
     GBDisassemblyInfo **disasm = GBDisassemblerProcess(rom, 0xA8, &count);
@@ -213,7 +244,9 @@ UInt8 op = 0x00;
 
     GBGameboyPowerOn(gameboy);
 
-    NSData *game = [NSData dataWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"tetris" ofType:@"gb"]];
+    // 09-op r,r
+    NSData *game = [NSData dataWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"11-op a,(hl)" ofType:@"gb"]];
+    if (!game) exit(EXIT_FAILURE);
 
     GBCartridge *cart = GBCartridgeCreate((UInt8 *)[game bytes], (UInt32)[game length]);
     bool inserted = GBCartridgeInsert(cart, gameboy);
@@ -222,7 +255,56 @@ UInt8 op = 0x00;
         printf("Loaded ROM!\n");
 
     [self setBoxes];
+    [self tryThing];
 }
+
+- (UInt16) hexValue:(NSTextField *)textField
+{
+    const char *stringValue = [[textField stringValue] UTF8String];
+
+    UInt16 hex = strtol(stringValue, NULL, 16);
+
+    return hex;
+}
+
+// pop af fails checksums maybe? This would cause a lot of these failures on instructions which I know work...
+
+// 0xC32A (end of pop af test)
+// 0xC31D (push bc in pop af test)
+// Fails on second test with 0x1301 because 0x01 & 0xF0 != 0x01
+
+// 01 - Failed (pop af, daa)
+// 02 - Failed (timer doesn't work)
+// 03 - Failed (E8 F8)
+// 04 - Passed
+// 05 - Passed
+// 06 - Passed
+// 07 - Failed? (18 20 28 30 38 C2 C3 CA D2 DA C4 CC CD D4 DC C0 C8 C9 D0 D8 D9)
+// 08 - Passed
+// 09 - Failed (B8 B9 BA BB BC BD 90 91 92 93 94 95 98 99 9A 9B 9C 9D 9F 05 0D 15 1D 25 2D 3D)
+// 10 - Passed
+// 11 - Failed (BE 96 9E 35 ??)
+
+// 0xFEA0 - 0xFEFF returns 0
+
+// EI delays a single cycle after completion (the instruction after EI completes before the interrupt)
+// HALT can fail?
+// 10 nn - STOP with screen on
+// Undefined only hang CPU.
+// IME simply disables calling of interrupts.
+// Upper bits of IF are 1
+// Writing to IF overwrites natural sets in the same cycle
+// Interrupts checked before fetch
+// IF bit is cleared only on jump
+// It takes 20 clocks to interrupt. 24 if halted.
+// Interrupts: (two waits, push, push, set PC)
+// Exiting halt mode always takes 4 cycles, even without interrupt
+// Halt bugs if an interrupt is pending and ime is disabled when executed.
+// --> In this case, we don't increment PC after the next instruction, and don't clear any IF bits
+
+// Div is upper 8 of internal clock. This is a direct mapping.
+// Bit 14 of the internal clock
+// Lots more timer stuff to fix. See timing PDF...
 
 - (IBAction) tick:(id)sender
 {
@@ -243,6 +325,13 @@ UInt8 op = 0x00;
         {
             GBClockTick(gameboy->clock);
 
+            if ([self breakTriggered])
+            {
+                [self setBreakTriggered:NO];
+
+                break;
+            }
+
             if (gameboy->cpu->state.mode == kGBProcessorModeFetch)
                 i++;
         }
@@ -259,16 +348,32 @@ UInt8 op = 0x00;
 
 - (IBAction) run:(id)sender
 {
-    NSInteger breakpoint = [[_breakpointBox stringValue] integerValue];
+    NSInteger breakpoint = [self hexValue:_breakpointBox]; //[[_breakpointBox stringValue] integerValue];
+    [_breakpointBox setStringValue:[NSString stringWithFormat:@"0x%04X", (UInt16)breakpoint]];
 
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^() {
         for ( ; ; )
         {
             GBClockTick(gameboy->clock);
 
+            if ([self breakTriggered])
+            {
+                [self setBreakTriggered:NO];
+
+                break;
+            }
+
+            if (!(gameboy->clock->internalTick % 0x1200000))
+                dispatch_async(dispatch_get_main_queue(), ^() {
+                    [self image:sender];
+                    [self setBoxes];
+                });
+
             if (gameboy->cpu->state.pc == breakpoint && gameboy->cpu->state.mode == kGBProcessorModeFetch)
                 break;
         }
+
+        // 0x2400000
 
         dispatch_async(dispatch_get_main_queue(), ^() {
             [self setBoxes];
@@ -318,7 +423,7 @@ UInt8 op = 0x00;
     bool highmap = control & 0x10;
 
     UInt8 *map1src = &gameboy->vram->memory[0x1800];
-    //UInt8 *map0src = &gameboy->vram->memory[0x1C00];
+    UInt8 *map0src = &gameboy->vram->memory[0x1C00];
     UInt8 *tileset = &gameboy->vram->memory[0];
 
     //UInt32 map1data[32 * 32 * 8 * 8];
@@ -361,7 +466,11 @@ UInt8 op = 0x00;
             UInt8 tile;
 
             if (highmap) {
-                tile = map1src[(y * 32) + x];
+                SInt8 tid = (y * 32) + x;
+
+                // -128 ---  0  --- +127
+                //   0  --- 128 ---  255
+                tile = map1src[tid + 128];
             } else {
                 tile = map1src[(y * 32) + x];
             }
@@ -387,6 +496,61 @@ UInt8 op = 0x00;
     }
 
     [_bgImage1 setImage:[[NSImage alloc] initWithCGImage:[map1img CGImage] size:NSMakeSize(256, 256)]];
+
+    NSBitmapImageRep *map0img = [self makeBitmapImageOfWidth:256 height:256];
+
+    for (UInt8 y = 0; y < 32; y++)
+    {
+        for (UInt8 x = 0; x < 32; x++)
+        {
+            UInt8 tile;
+
+            if (highmap) {
+                SInt8 tid = (y * 32) + x;
+
+                // -128 ---  0  --- +127
+                //   0  --- 128 ---  255
+                tile = map1src[tid + 128];
+            } else {
+                tile = map0src[(y * 32) + x];
+            }
+
+
+            for (UInt8 y0 = 0; y0 < 8; y0++)
+            {
+                for (UInt8 x0 = 0; x0 < 8; x0++)
+                {
+                    NSUInteger color = tiles[tile][(y0 * 8) + x0];
+
+                    NSUInteger rgb[3] = {
+                        (color >> 16) & 0xFF,
+                        (color >>  8) & 0xFF,
+                        (color >>  0) & 0xFF
+                    };
+
+                    [map0img setPixel:rgb atX:((x * 8) + x0) y:((y * 8) + y0)];
+                }
+
+            }
+        }
+    }
+
+    [_bgImage0 setImage:[[NSImage alloc] initWithCGImage:[map0img CGImage] size:NSMakeSize(256, 256)]];
+}
+
+- (IBAction) breakProgram:(id)sender
+{
+    _breakTriggered = YES;
+}
+
+- (IBAction) loadMemory:(id)sender
+{
+    UInt16 address = [self hexValue:_boxMemoryAt];
+
+    UInt8 data = __GBMemoryManagerRead(gameboy->cpu->mmu, address);
+
+    [_boxMemoryAt setStringValue:[NSString stringWithFormat:@"0x%04X", address]];
+    [_boxMemoryData setStringValue:[NSString stringWithFormat:@"0x%02X", data]];
 }
 
 @end

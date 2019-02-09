@@ -67,6 +67,12 @@ bool GBInterruptControllerCheck(GBInterruptController *this)
     return (this->cpu->state.ime && (this->interruptFlagPort->value & this->interruptControl & 0x1F));
 }
 
+void GBInterruptControllerReset(GBInterruptController *this)
+{
+    this->interruptFlagPort->value &= ~(1 << this->interrupt);
+    this->interruptPending = false;
+}
+
 void GBInterruptControllerDestroy(GBInterruptController *this)
 {
     free(this->interruptFlagPort);
@@ -82,6 +88,9 @@ bool __GBInterruptControllerInstall(GBInterruptController *this, struct __GBGame
 
 void __GBInterruptControllerTick(GBInterruptController *this, UInt64 tick)
 {
+    if (this->cpu->state.mode != kGBProcessorModeFetch)
+        return;
+
     // Don't check for interrupts if interrupts are disabled or an interrupt is already pending
     if (!this->cpu->state.ime || this->interruptPending)
         return;
@@ -99,8 +108,8 @@ void __GBInterruptControllerTick(GBInterruptController *this, UInt64 tick)
             // Trigger this interrupt. Any other pending interrupts will have to wait their turn...
             this->destination = this->lookup[i];
             this->interruptPending = true;
+            this->interrupt = i;
 
-            this->interruptFlagPort->value &= ~(1 << i);
             return;
         }
     }

@@ -62,12 +62,104 @@ GBClock *GBClockCreate(void)
     return clock;
 }
 
+bool printed[0x100] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+
+void __GBClockTimerDebug(GBClock *this, GBProcessor *cpu, GBGraphicsDriver *driver)
+{
+    if (cpu->state.pc < 0x100 && !printed[cpu->state.pc])
+    {
+        //printf("PC: 0x%04X, timer: 0x%04X\n", cpu->state.pc, this->tick);
+
+        printed[cpu->state.pc] = true;
+    }
+
+    static UInt64 lastFetch = 0;
+
+    if (!lastFetch && cpu->state.mode == kGBProcessorModeFetch)
+        lastFetch = this->internalTick;
+
+    if (cpu->state.mode == kGBProcessorModeFetch)
+    {
+        UInt64 diff = this->internalTick - lastFetch;
+        lastFetch = this->internalTick;
+
+        const char *opString = (cpu->state.prefix ? cpu->decode_prefix[cpu->state.op]->name : cpu->decode[cpu->state.op]->name);
+
+        //printf("Info: Instruction '%s' ran in %llu ticks.\n", opString, diff);
+    }
+
+    static CFAbsoluteTime time = 0;
+
+    if (!time)
+        time = CFAbsoluteTimeGetCurrent();
+
+    if (!(this->internalTick % 0x800000))
+    {
+        CFAbsoluteTime updated = CFAbsoluteTimeGetCurrent();
+        CFAbsoluteTime diff = updated - time;
+
+        printf("Executed ticks in %fs (real GB should be 2.0s)\n", diff);
+
+        time = updated;
+    }
+
+    static UInt64 lastScreenBegin = 0;
+
+    if (driver->displayOn)
+    {
+        static UInt8 lastMode = kGBDriverStateSpriteSearch;
+
+        if (!lastScreenBegin && driver->driverMode == kGBDriverStateSpriteSearch)
+            lastScreenBegin = this->internalTick;
+
+        if (lastMode == kGBDriverStateVBlank && driver->driverMode == kGBDriverStateSpriteSearch)
+        {
+            UInt64 diff = this->internalTick - lastScreenBegin;
+            lastScreenBegin = this->internalTick;
+
+            //printf("Info: Last screen drawn in %llu ticks.\n", diff);
+        }
+
+        lastMode = driver->driverMode;
+    }
+}
+
+// 0xC224
+// 0xC7D3 --> std_print
+// 0xC246 (C24F)
+// 0xC24C
+// 0xC399
+// 0xC3B1
+
 void GBClockTick(GBClock *this)
 {
     if (!this->gameboy)
         return;
 
     bool timerEnable = !!(this->timerControl->value & kGBTimerEnableFlag);
+    GBMemoryManager *mmu = this->gameboy->cpu->mmu;
+    GBGraphicsDriver *driver = this->gameboy->driver;
+    GBProcessor *cpu = this->gameboy->cpu;
+    GBInterruptController *ic = cpu->ic;
+
+    //__GBClockTimerDebug(this, cpu, driver);
 
     this->internalTick++;
     this->tick++;
@@ -108,30 +200,10 @@ void GBClockTick(GBClock *this)
 
     // Get timer speed and set new value.
 
-    GBMemoryManager *mmu = this->gameboy->cpu->mmu;
-    GBGraphicsDriver *driver = this->gameboy->driver;
-    GBProcessor *cpu = this->gameboy->cpu;
-    GBInterruptController *ic = cpu->ic;
-
     mmu->tick(mmu, this->internalTick);
     driver->tick(driver, this->internalTick);
     cpu->tick(cpu, this->internalTick);
     ic->tick(ic, this->internalTick);
-
-    static CFAbsoluteTime time = 0;
-
-    if (!time)
-        time = CFAbsoluteTimeGetCurrent();
-
-    if (!(this->internalTick % 0x800000))
-    {
-        CFAbsoluteTime updated = CFAbsoluteTimeGetCurrent();
-        CFAbsoluteTime diff = updated - time;
-
-        printf("Executed ticks in %fs (real GB should be 2.0s)\n", diff);
-
-        time = updated;
-    }
 }
 
 void GBClockDestroy(GBClock *this)

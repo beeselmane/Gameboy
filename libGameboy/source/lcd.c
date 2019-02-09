@@ -181,7 +181,7 @@ void __GBLCDControlPortWrite(GBLCDControlPort *this, UInt8 byte)
 
         fprintf(stderr, "Note: Turned off display.\n");
     } else {
-        this->driver->driverMode = kGBDriverStatePixelTransfer;
+        this->driver->driverMode = kGBDriverStateSpriteSearch;
         this->driver->driverModeTicks = 0;
         this->driver->displayOn = true;
 
@@ -399,7 +399,9 @@ void __GBGraphicsDriverSetMode(GBGraphicsDriver *this, UInt8 mode)
     {
         case kGBDriverStateVBlank: {
             if (this->status->value & kGBVideoInterruptVBlank)
-                (*this->interruptRequest) |= (1 << kGBInterruptVBlank);
+                (*this->interruptRequest) |= (1 << kGBInterruptLCDStat);
+
+            (*this->interruptRequest) |= (1 << kGBInterruptVBlank);
         } break;
         case kGBDriverStateHBlank: {
             if (this->status->value & kGBVideoInterruptHBlank)
@@ -434,14 +436,6 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
     switch (this->driverMode)
     {
         case kGBDriverStateSpriteSearch: {
-            if (this->driverModeTicks > kGBDriverSpriteSearchClocks)
-            {
-                __GBGraphicsDriverSetMode(this, kGBDriverStatePixelTransfer);
-                this->driverModeTicks = 0;
-
-                return;
-            }
-
             // Do a sprite every two ticks
             // This isn't *really* important, but I like it...
             // Note: This is a result of the fact that video RAM is clocked at 2 MHz
@@ -463,9 +457,21 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
 
                 this->spriteIndex++;
             }
+
+            if (this->driverModeTicks == kGBDriverSpriteSearchClocks)
+            {
+                __GBGraphicsDriverSetMode(this, kGBDriverStatePixelTransfer);
+                this->driverModeTicks = 0;
+
+                return;
+            }
         } break;
         case kGBDriverStatePixelTransfer: {
-            if (this->fifoPosition >= kGBScreenWidth)
+
+            // TODO: Transfer pixels if we can
+            this->fifoPosition++;
+
+            if (this->fifoPosition == kGBScreenWidth)
             {
                 __GBGraphicsDriverSetMode(this, kGBDriverStateHBlank);
 
@@ -474,12 +480,11 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
 
                 return;
             }
-
-            // TODO: Transfer pixels if we can
-            this->fifoPosition++;
         } break;
         case kGBDriverStateHBlank: {
-            if (this->driverModeTicks > kGBDriverHorizonalClocks)
+            // Don't do anything...
+
+            if (this->driverModeTicks == kGBDriverHorizonalClocks)
             {
                 this->coordinate->value++;
                 this->fifoPosition = 0;
@@ -495,17 +500,16 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                 this->fetcherMode = kGBFetcherStateFetchTile;
                 // TODO: Fetcher initial state
 
+                this->driverModeTicks = 0;
                 this->lineSpriteCount = 0;
                 this->spriteIndex = 0;
 
                 return;
             }
-
-            // Don't do anything...
         } break;
         case kGBDriverStateVBlank: {
             // Just update the coordinate every "horizonal" clock
-            if (this->driverModeTicks > kGBDriverVerticalClockUpdate)
+            if (this->driverModeTicks == kGBDriverVerticalClockUpdate)
             {
                 this->driverModeTicks = 0;
 

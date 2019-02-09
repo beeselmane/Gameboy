@@ -42,6 +42,7 @@ typedef struct __GBInterruptController {
 
     bool interruptPending;
     UInt16 destination;
+    UInt8 interrupt;
 
     UInt16 lookup[kGBInterruptCount];
 
@@ -51,6 +52,7 @@ typedef struct __GBInterruptController {
 
 GBInterruptController *GBInterruptControllerCreate(struct __GBProcessor *cpu);
 bool GBInterruptControllerCheck(GBInterruptController *this); // Secondary Check
+void GBInterruptControllerReset(GBInterruptController *this);
 void GBInterruptControllerDestroy(GBInterruptController *this);
 
 bool __GBInterruptControllerInstall(GBInterruptController *this, struct __GBGameboy *gameboy);

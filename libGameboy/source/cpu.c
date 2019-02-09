@@ -47,7 +47,6 @@ GBProcessor *GBProcessorCreate(void)
         cpu->mmu->interruptControl = &cpu->ic->interruptControl;
         cpu->state.mode = kGBProcessorModeOff;
 
-        cpu->state.willInterrupt = false;
         cpu->state.enableIME = false;
         cpu->state.ime = false;
         cpu->state.a = 0;
@@ -125,26 +124,17 @@ void __GBProcessorTick(GBProcessor *this, UInt64 tick)
                 this->state.ime = true;
             }
 
-            if (this->state.willInterrupt)
-            {
-                this->state.willInterrupt = false;
-
-                if (!GBInterruptControllerCheck(this->ic)) {
-                    this->ic->interruptPending = false;
-                } else {
-                    this->state.mode = kGBProcessorModeInterrupted;
-
-                    printf("CPU Interrupted! Jump to 0x%04X\n", this->ic->destination);
-
-                    // We use this to track stalls
-                    this->state.data = 0;
-
-                    return;
-                }
-            }
-
             if (this->ic->interruptPending)
-                this->state.willInterrupt = true;
+            {
+                this->state.mode = kGBProcessorModeInterrupted;
+
+                printf("CPU Interrupted! Jump to 0x%04X\n", this->ic->destination);
+
+                // We use this to track stalls
+                this->state.data = 0;
+
+                return;
+            }
 
             __GBProcessorRead(this, this->state.pc++);
             this->state.mode = kGBProcessorModeRun;
@@ -158,7 +148,7 @@ void __GBProcessorTick(GBProcessor *this, UInt64 tick)
             }
         } break;
         case kGBProcessorModeInterrupted: {
-            if (!GBInterruptControllerCheck(this->ic))
+            if (this->ic->interruptPending && !GBInterruptControllerCheck(this->ic))
             {
                 printf("Interrupt Cancelled.\n");
 
@@ -167,6 +157,8 @@ void __GBProcessorTick(GBProcessor *this, UInt64 tick)
 
                 return;
             }
+
+            GBInterruptControllerReset(this->ic);
 
             switch (this->state.data)
             {
@@ -180,7 +172,7 @@ void __GBProcessorTick(GBProcessor *this, UInt64 tick)
                     // Store low byte of PC
                     if (this->state.accessed)
                     {
-                        __GBProcessorWrite(this, this->state.sp - 1, this->state.pc & 0xFF);
+                        __GBProcessorWrite(this, this->state.sp - 2, this->state.pc & 0xFF);
 
                         this->state.data++;
                     }
@@ -203,7 +195,7 @@ void __GBProcessorTick(GBProcessor *this, UInt64 tick)
                     {
                         __GBProcessorRead(this, 0x0000);
 
-                        this->ic->interruptPending = false;
+                        this->state.ime = false;
                         this->state.data++;
                     }
                 } break;

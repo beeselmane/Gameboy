@@ -58,39 +58,9 @@ static __attribute__((always_inline)) void __GBProcessorReadArgument(GBProcessor
 
 #pragma mark - ALU
 
-static __attribute__((always_inline)) void __ALUAdd8(GBProcessor *cpu, UInt8 *to, UInt8 *from, UInt8 carry)
+static __attribute__((always_inline)) UInt16 __ALUComplement(UInt8 value)
 {
-    // Perform two 4-bit adds (this is how the gameboy actually does this)
-    UInt8 lo = ((*from) & 0xF) + ((*to) & 0xF) + carry;
-    cpu->state.f.h = lo >> 4;
-
-    UInt8 hi = ((*from) >> 4) + ((*to) >> 4) + cpu->state.f.h;
-    cpu->state.f.c = hi >> 4;
-
-    (*to) = (hi << 4) | (lo & 0xF);
-
-    cpu->state.f.z = !(*to);
-    cpu->state.f.n = 0;
-}
-
-static __attribute__((always_inline)) void __ALUAdd16(GBProcessor *cpu, UInt16 *to, UInt16 *from, UInt8 carry)
-{
-    // Perform two 8-bit adds (four 4-bit adds). Flags should automatically be right.
-    __ALUAdd8(cpu, (UInt8 *)(to) + 0, (UInt8 *)(from) + 0, carry);
-    __ALUAdd8(cpu, (UInt8 *)(to) + 1, (UInt8 *)(from) + 1, cpu->state.f.c);
-}
-
-static __attribute__((always_inline)) void __ALUSub8(GBProcessor *cpu, SInt8 *to, SInt8 *from, UInt8 carry)
-{
-    // I forgot how 2's complement works so I did this instead
-    SInt8 result = (*to) - (*from) + carry;
-
-    cpu->state.f.z = !result;
-    cpu->state.f.n = 1;
-    cpu->state.f.h = (((*to) & 0x0F) < ((*from) & 0x0F));
-    cpu->state.f.c = (result < 0);
-
-    (*to) = result;
+    return (~value);
 }
 
 static __attribute__((always_inline)) UInt16 __ALUSignExtend(UInt8 value)
@@ -102,9 +72,57 @@ static __attribute__((always_inline)) UInt16 __ALUSignExtend(UInt8 value)
     }
 }
 
-static __attribute__((always_inline)) void __ALUAnd8(GBProcessor *cpu, UInt8 *to, UInt8 *from)
+// Note: Subtract just sets the n flag in f
+static __attribute__((always_inline)) void __ALUAdd8(GBProcessor *cpu, UInt8 *to, UInt8 from, UInt8 carry)
 {
-    *to = *to & *from;
+    // Perform two 4-bit adds (this is how the gameboy actually does this)
+    UInt8 lo = (from & 0xF) + ((*to) & 0xF) + carry;
+    cpu->state.f.h = lo >> 4;
+
+    UInt8 hi = (from >> 4) + ((*to) >> 4) + cpu->state.f.h;
+    cpu->state.f.c = hi >> 4;
+
+    (*to) = (hi << 4) | (lo & 0xF);
+
+    cpu->state.f.z = !(*to);
+    cpu->state.f.n = 0;
+}
+
+static __attribute__((always_inline)) void __ALUAdd16(GBProcessor *cpu, UInt16 *to, UInt16 from, UInt8 carry)
+{
+    // Perform two 8-bit adds (four 4-bit adds). Flags should automatically be right.
+    __ALUAdd8(cpu, (UInt8 *)(to) + 0, from & 0xFF, carry);
+    __ALUAdd8(cpu, (UInt8 *)(to) + 1, from >> 8, cpu->state.f.c);
+}
+
+static __attribute__((always_inline)) void __ALUSub8(GBProcessor *cpu, UInt8 *to, UInt8 from, UInt8 carry)
+{
+    // I remembered how to 2's complement
+
+    /*__ALUAdd8(cpu, to, __ALUComplement(from), ~carry);
+
+    cpu->state.f.n = 1;
+
+    // The gameboy flips these for some reason...
+    if (cpu->state.f.n)
+    {
+        cpu->state.f.c = ~cpu->state.f.c;
+        cpu->state.f.h = ~cpu->state.f.h;
+    }*/
+
+    UInt8 result = (*to) + (~from + 1) - (~carry + 1);
+
+    cpu->state.f.z = !result;
+    cpu->state.f.n = 1;
+    cpu->state.f.h = !!((((*to) & 0x0F) + ((~from + 1) & 0x0F)) & 0x80);
+    cpu->state.f.c = !!(result & 0x80);
+
+    (*to) = result;
+}
+
+static __attribute__((always_inline)) void __ALUAnd8(GBProcessor *cpu, UInt8 *to, UInt8 from)
+{
+    *to &= from;
 
     cpu->state.f.z = !(*to);
     cpu->state.f.n = 0;
@@ -112,9 +130,9 @@ static __attribute__((always_inline)) void __ALUAnd8(GBProcessor *cpu, UInt8 *to
     cpu->state.f.c = 0;
 }
 
-static __attribute__((always_inline)) void __ALUXor8(GBProcessor *cpu, UInt8 *to, UInt8 *from)
+static __attribute__((always_inline)) void __ALUXor8(GBProcessor *cpu, UInt8 *to, UInt8 from)
 {
-    *to = *to ^ *from;
+    *to ^= from;
 
     cpu->state.f.z = !(*to);
     cpu->state.f.n = 0;
@@ -122,9 +140,9 @@ static __attribute__((always_inline)) void __ALUXor8(GBProcessor *cpu, UInt8 *to
     cpu->state.f.c = 0;
 }
 
-static __attribute__((always_inline)) void __ALUOr8(GBProcessor *cpu, UInt8 *to, UInt8 *from)
+static __attribute__((always_inline)) void __ALUOr8(GBProcessor *cpu, UInt8 *to, UInt8 from)
 {
-    *to = *to | *from;
+    *to |= from;
 
     cpu->state.f.z = !(*to);
     cpu->state.f.n = 0;
@@ -132,11 +150,11 @@ static __attribute__((always_inline)) void __ALUOr8(GBProcessor *cpu, UInt8 *to,
     cpu->state.f.c = 0;
 }
 
-static __attribute__((always_inline)) void __ALUCP8(GBProcessor *cpu, UInt8 *to, UInt8 *from)
+static __attribute__((always_inline)) void __ALUCP8(GBProcessor *cpu, UInt8 *to, UInt8 from)
 {
     UInt8 initial = *to;
 
-    __ALUSub8(cpu, (SInt8 *)to, (SInt8 *)from, 0);
+    __ALUSub8(cpu, to, from, 0);
 
     *to = initial;
 }
@@ -437,7 +455,6 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
 
 #pragma mark - Control flow macros
 
-// TODO: Implement these
 #define jr(code, str, cond)                                                             \
     op_wait_stall(code, 2, "jr " str d8, {                                              \
         __GBProcessorReadArgument(cpu);                                                 \
@@ -594,16 +611,16 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
         UInt8 carry = cpu->state.f.c;                                       \
         UInt8 one = 1;                                                      \
                                                                             \
-        __ALUAdd8(cpu, &cpu->state.reg, &one, 0);                           \
+        __ALUAdd8(cpu, &cpu->state.reg, one, 0);                            \
         cpu->state.f.c = carry;                                             \
     })
 
 #define dec_r(code, reg)                                                    \
     op_simple(code, "dec " #reg, {                                          \
         UInt8 carry = cpu->state.f.c;                                       \
-        SInt8 one = 1;                                                      \
+        UInt8 one = 1;                                                      \
                                                                             \
-        __ALUSub8(cpu, (SInt8 *)&cpu->state.reg, &one, 0);                  \
+        __ALUSub8(cpu, &cpu->state.reg, one, 0);                            \
         cpu->state.f.c = carry;                                             \
     })
 
@@ -621,37 +638,37 @@ static __attribute__((always_inline)) void __ALURotateLeft(UInt8 *reg, UInt8 amo
     op_stall(code, 1, "add hl, " #reg, {                                    \
         UInt8 zero = cpu->state.f.z;                                        \
                                                                             \
-        __ALUAdd16(cpu, &cpu->state.hl, &cpu->state.reg, 0);                \
+        __ALUAdd16(cpu, &cpu->state.hl, cpu->state.reg, 0);                 \
                                                                             \
         cpu->state.f.z = zero;                                              \
     })
 
-#define math_op(code, name, reg, func, c)                                   \
+#define op_alu(code, name, reg, func, c)                                    \
     op_simple(code, name " a, " #reg, {                                     \
-        func(cpu, (void *)&cpu->state.a, (void *)&cpu->state.reg, c);       \
+        func(cpu, &cpu->state.a, cpu->state.reg, c);                        \
     })
 
-#define add(code, reg) math_op(code, "add", reg, __ALUAdd8, 0)
+#define add(code, reg) op_alu(code, "add", reg, __ALUAdd8, 0)
 
-#define adc(code, reg) math_op(code, "adc", reg, __ALUAdd8, cpu->state.f.c)
+#define adc(code, reg) op_alu(code, "adc", reg, __ALUAdd8, cpu->state.f.c)
 
-#define sub(code, reg) math_op(code, "sub", reg, __ALUSub8, 0)
+#define sub(code, reg) op_alu(code, "sub", reg, __ALUSub8, 0)
 
-#define sbc(code, reg) math_op(code, "sbc", reg, __ALUSub8, cpu->state.f.c)
+#define sbc(code, reg) op_alu(code, "sbc", reg, __ALUSub8, cpu->state.f.c)
 
 #define alu_op(code, name, reg, func)                                       \
     op_simple(code, name " " #reg, {                                        \
-        func(cpu, &cpu->state.a, &cpu->state.reg);                          \
+        func(cpu, &cpu->state.a, cpu->state.reg);                           \
     })
 
 #define alu_op_hl(code, name, func)                                         \
     op_hl(code, name " (hl)", {                                             \
-        func(cpu, &cpu->state.a, &cpu->state.mdr);                          \
+        func(cpu, &cpu->state.a, cpu->state.mdr);                           \
     })
 
 #define alu_op_arg(code, name, func)                                        \
     op_arg(code, name " " d8, {                                             \
-        func(cpu, &cpu->state.a, &cpu->state.mdr);                          \
+        func(cpu, &cpu->state.a, cpu->state.mdr);                           \
     })
 
 #define and(code, reg) alu_op(code, "and", reg, __ALUAnd8)
@@ -703,7 +720,7 @@ op(0x08, 3, "ld (" d16 "), sp", {
     } else if (cpu->state.mode == kGBProcessorModeWait2) {
         if (cpu->state.accessed)
         {
-            cpu->state.mar = cpu->state.data || (cpu->state.mdr << 8);
+            cpu->state.mar = cpu->state.data | (cpu->state.mdr << 8);
 
             __GBProcessorWrite(cpu, cpu->state.mar, cpu->state.sp & 0xFF);
 
@@ -739,12 +756,12 @@ dec_r(0x0D, c);
 ld_m(0x0E, c);
 
 op_simple(0x0F, "rrca", {
-    __ALURotateRight(&cpu->state.a, 1);
-
-    cpu->state.f.z = 0;
-    cpu->state.f.n = 0;
-    cpu->state.f.h = 0;
     cpu->state.f.c = cpu->state.a & 1;
+    cpu->state.f.h = 0;
+    cpu->state.f.n = 0;
+    cpu->state.f.z = 0;
+
+    __ALURotateRight(&cpu->state.a, 1);
 });
 
 op(0x10, 2, "stop 0", {
@@ -793,7 +810,7 @@ op_simple(0x1F, "rra", {
     cpu->state.f.z = 0;
     cpu->state.f.n = 0;
     cpu->state.f.h = cpu->state.f.c;
-    cpu->state.f.c = cpu->state.a & 0;
+    cpu->state.f.c = cpu->state.a & 1;
 
     cpu->state.a >>= 1;
     cpu->state.a |= cpu->state.f.h << 7;
@@ -818,7 +835,9 @@ dec_r(0x25, h);
 ld_m(0x26, h);
 
 op(0x27, 1, "daa", {
-    //
+    fprintf(stderr, "CPU: Someone wants DAA...... NO.\n");
+
+    // :(
 });
 
 jr(0x28, "z, ", cpu->state.f.z);
@@ -862,7 +881,7 @@ op_wait2(0x34, 1, "inc (hl)", {
     UInt8 carry = cpu->state.f.c;
     UInt8 one = 1;
 
-    __ALUAdd8(cpu, &cpu->state.mdr, &one, 0);
+    __ALUAdd8(cpu, &cpu->state.mdr, one, 0);
     cpu->state.f.c = carry;
 
     __GBProcessorWrite(cpu, cpu->state.hl, cpu->state.mdr);
@@ -874,9 +893,9 @@ op_wait2(0x35, 1, "dec (hl)", {
     __GBProcessorRead(cpu, cpu->state.hl);
 }, {
     UInt8 carry = cpu->state.f.c;
-    SInt8 one = 1;
+    UInt8 one = 1;
 
-    __ALUSub8(cpu, (SInt8 *)&cpu->state.mdr, &one, 0);
+    __ALUSub8(cpu, &cpu->state.mdr, one, 0);
     cpu->state.f.c = carry;
 
     __GBProcessorWrite(cpu, cpu->state.hl, cpu->state.mdr);
@@ -1009,7 +1028,7 @@ add(0x84, h);
 add(0x85, l);
 
 op_hl(0x86, "add a, (hl)", {
-    __ALUAdd8(cpu, &cpu->state.a, &cpu->state.mdr, 0);
+    __ALUAdd8(cpu, &cpu->state.a, cpu->state.mdr, 0);
 });
 
 add(0x87, a);
@@ -1022,7 +1041,7 @@ adc(0x8C, h);
 adc(0x8D, l);
 
 op_hl(0x8E, "adc a, (hl)", {
-    __ALUAdd8(cpu, &cpu->state.a, &cpu->state.mdr, cpu->state.f.c);
+    __ALUAdd8(cpu, &cpu->state.a, cpu->state.mdr, cpu->state.f.c);
 });
 
 adc(0x8F, a);
@@ -1035,7 +1054,7 @@ sub(0x94, h);
 sub(0x95, l);
 
 op_hl(0x96, "sub a, (hl)", {
-    __ALUSub8(cpu, (SInt8 *)&cpu->state.a, (SInt8 *)&cpu->state.mdr, 0);
+    __ALUSub8(cpu, &cpu->state.a, cpu->state.mdr, 0);
 });
 
 sub(0x97, a);
@@ -1048,7 +1067,7 @@ sbc(0x9C, h);
 sbc(0x9D, l);
 
 op_hl(0x9E, "sbc a, (hl)", {
-    __ALUSub8(cpu, (SInt8 *)&cpu->state.a, (SInt8 *)&cpu->state.mdr, cpu->state.f.c);
+    __ALUSub8(cpu, &cpu->state.a, cpu->state.mdr, cpu->state.f.c);
 });
 
 sbc(0x9F, a);
@@ -1107,7 +1126,7 @@ call(0xC4, "nz, ", !cpu->state.f.z);
 push(0xC5, bc);
 
 op_arg(0xC6, "add a, " d8, {
-    __ALUAdd8(cpu, &cpu->state.a, &cpu->state.mdr, 0);
+    __ALUAdd8(cpu, &cpu->state.a, cpu->state.mdr, 0);
 });
 
 rst(0xC7, 0x00);
@@ -1132,7 +1151,7 @@ call(0xCC, "z, ", cpu->state.f.z);
 call(0xCD, "", true);
 
 op_arg(0xCE, "adc a, " d8, {
-    __ALUAdd8(cpu, &cpu->state.a, &cpu->state.mdr, cpu->state.f.c);
+    __ALUAdd8(cpu, &cpu->state.a, cpu->state.mdr, cpu->state.f.c);
 });
 
 rst(0xCF, 0x08);
@@ -1143,8 +1162,14 @@ udef(0xD3);
 call(0xD4, "nc, ", !cpu->state.f.c);
 push(0xD5, de);
 
+// 0xC05A
+// 0xFF80 -- checksum address
+
+// 0xFFFFFFFF crc 0x30
+// 0x0B2420DE
+
 op_arg(0xD6, "sub " d8, {
-    __ALUSub8(cpu, (SInt8 *)&cpu->state.a, (SInt8 *)&cpu->state.mdr, 0);
+    __ALUSub8(cpu, &cpu->state.a, cpu->state.mdr, 0);
 });
 
 rst(0xD7, 0x10);
@@ -1170,7 +1195,7 @@ call(0xDC, "c, ", cpu->state.f.c);
 udef(0xDD);
 
 op_arg(0xDE, "sbc " d8, {
-    __ALUSub8(cpu, (SInt8 *)&cpu->state.a, (SInt8 *)&cpu->state.mdr, cpu->state.f.c);
+    __ALUSub8(cpu, &cpu->state.a, cpu->state.mdr, cpu->state.f.c);
 });
 
 rst(0xDF, 0x18);
@@ -1202,9 +1227,7 @@ rst(0xE7, 0x20);
 op_wait3_stall(0xE8, 1, "add sp, " d8, {
     __GBProcessorReadArgument(cpu);
 }, {
-    UInt16 v = __ALUSignExtend(cpu->state.mdr);
-
-    __ALUAdd16(cpu, &cpu->state.sp, &v, 0);
+    __ALUAdd16(cpu, &cpu->state.sp, __ALUSignExtend(cpu->state.mdr), 0);
 }, {
     __GBProcessorRead(cpu, 0x0000);
 
@@ -1224,7 +1247,7 @@ op_wait3(0xEA, 3, "ld (" d16 "), a", {
 
     __GBProcessorReadArgument(cpu);
 }, {
-    __GBProcessorWrite(cpu, cpu->state.data || (cpu->state.mdr << 8), cpu->state.a);
+    __GBProcessorWrite(cpu, cpu->state.data | ((cpu->state.mdr) << 8), cpu->state.a);
 }, {
     // That's it
 });
@@ -1245,10 +1268,12 @@ op_wait2(0xF0, 2, "ld a, " d8 "(" dIO ")", {
     cpu->state.a = cpu->state.mdr;
 });
 
+// 0xCE47
+
 op_wait2_stall(0xF1, 1, "pop af", {
     __GBProcessorRead(cpu, cpu->state.sp + 0);
 }, {
-    cpu->state.f.reg = cpu->state.mdr;
+    cpu->state.f.reg = cpu->state.mdr & 0xF0;
 
     __GBProcessorRead(cpu, cpu->state.sp + 1);
 }, {
@@ -1273,7 +1298,7 @@ udef(0xF4);
 op_wait2_stall(0xF5, 1, "push af", {
     __GBProcessorWrite(cpu, cpu->state.sp - 1, cpu->state.a);
 }, {
-    __GBProcessorWrite(cpu, cpu->state.sp - 2, cpu->state.f.reg);
+    __GBProcessorWrite(cpu, cpu->state.sp - 2, cpu->state.f.reg & 0xF0);
 }, {
     cpu->state.sp -= 2;
 });
@@ -1285,10 +1310,9 @@ rst(0xF7, 0x30);
 op_wait2_stall(0xF8, 2, "ld hl, " d8 "(sp)", {
     __GBProcessorReadArgument(cpu);
 }, {
-    UInt16 v = __ALUSignExtend(cpu->state.mdr);
     UInt16 sp = cpu->state.sp;
 
-    __ALUAdd16(cpu, &cpu->state.sp, &v, 0);
+    __ALUAdd16(cpu, &cpu->state.sp, __ALUSignExtend(cpu->state.mdr), 0);
 
     cpu->state.hl = cpu->state.sp;
     cpu->state.sp = sp;
@@ -1308,7 +1332,7 @@ op_wait3(0xFA, 3, "ld a, (" d16 ")", {
 
     __GBProcessorReadArgument(cpu);
 }, {
-    __GBProcessorRead(cpu, cpu->state.a || (cpu->state.mdr << 8));
+    __GBProcessorRead(cpu, cpu->state.a | (cpu->state.mdr << 8));
 }, {
     cpu->state.a = cpu->state.mdr;
 });
@@ -1443,7 +1467,7 @@ rst(0xFF, 0x38);
         cpu->state.f.c = cpu->state.reg & 1;                                \
                                                                             \
         cpu->state.reg >>= 1;                                               \
-        cpu->state.reg |= (cpu->state.reg >> 6);                            \
+        cpu->state.reg |= (cpu->state.reg & 0x40) << 1;                     \
         cpu->state.f.z = !cpu->state.reg;                                   \
     })
 
