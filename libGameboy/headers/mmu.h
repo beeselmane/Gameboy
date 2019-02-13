@@ -58,6 +58,7 @@ typedef struct __GBMemoryManager {
     bool *romMasked;
 
     UInt8 *interruptControl;
+    bool *dma;
 
     UInt16 *mar;
     UInt8 *mdr;

@@ -156,6 +156,7 @@ void GBClockTick(GBClock *this)
     bool timerEnable = !!(this->timerControl->value & kGBTimerEnableFlag);
     GBMemoryManager *mmu = this->gameboy->cpu->mmu;
     GBGraphicsDriver *driver = this->gameboy->driver;
+    GBDMARegister *dma = this->gameboy->dma;
     GBProcessor *cpu = this->gameboy->cpu;
     GBInterruptController *ic = cpu->ic;
 
@@ -204,6 +205,7 @@ void GBClockTick(GBClock *this)
     driver->tick(driver, this->internalTick);
     cpu->tick(cpu, this->internalTick);
     ic->tick(ic, this->internalTick);
+    dma->tick(dma, this->internalTick);
 }
 
 void GBClockDestroy(GBClock *this)

@@ -31,11 +31,17 @@ GBGameboy *GBGameboyCreate(void)
         gameboy->gamepad = GBGamepadCreate();
         success &= !!gameboy->gamepad;
 
+        gameboy->dma = GBDMARegisterCreate();
+        success &= !!gameboy->dma;
+
         gameboy->clock = GBClockCreate();
         success &= !!gameboy->clock;
 
         if (!success)
         {
+            if (gameboy->dma)
+                GBDMARegisterDestroy(gameboy->dma);
+
             if (gameboy->gamepad)
                 free(gameboy->gamepad);
 
@@ -64,12 +70,15 @@ GBGameboy *GBGameboyCreate(void)
         installed &= gameboy->vram->install(gameboy->vram, gameboy);
         installed &= gameboy->driver->install(gameboy->driver, gameboy);
         installed &= gameboy->gamepad->install(gameboy->gamepad, gameboy);
+        installed &= gameboy->dma->install(gameboy->dma, gameboy);
         installed &= gameboy->cpu->ic->install(gameboy->cpu->ic, gameboy);
         installed &= gameboy->clock->install(gameboy->clock, gameboy);
 
         if (!installed)
         {
             GBClockDestroy(gameboy->clock);
+            GBDMARegisterDestroy(gameboy->dma);
+            GBGamepadDestroy(gameboy->gamepad);
             GBWorkRAMDestroy(gameboy->wram);
             GBVideoRAMDestroy(gameboy->vram);
             GBIOMapperDestroy(gameboy->mmio);

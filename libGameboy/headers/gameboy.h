@@ -7,6 +7,7 @@
 #include "bios.h"
 #include "cart.h"
 #include "cpu.h"
+#include "dma.h"
 #include "mmio.h"
 #include "mmu.h"
 #include "lcd.h"
@@ -30,6 +31,7 @@ struct __GBGameboy {
     GBVideoRAM *vram;
     GBGraphicsDriver *driver;
     GBGamepad *gamepad;
+    GBDMARegister *dma;
     GBClock *clock;
 
     GBCartridge *cart;

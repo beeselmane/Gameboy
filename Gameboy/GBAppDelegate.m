@@ -245,7 +245,7 @@ void __GBIOWrite(GBIORegister *this, UInt8 byte)
     GBGameboyPowerOn(gameboy);
 
     // 09-op r,r
-    NSData *game = [NSData dataWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"07-jr,jp,call,ret,rst" ofType:@"gb"]];
+    NSData *game = [NSData dataWithContentsOfFile:[[NSBundle mainBundle] pathForResource:@"tetris" ofType:@"gb"]];
     if (!game) exit(EXIT_FAILURE);
 
     GBCartridge *cart = GBCartridgeCreate((UInt8 *)[game bytes], (UInt32)[game length]);
@@ -366,6 +366,10 @@ void __GBIOWrite(GBIORegister *this, UInt8 byte)
             if (!(gameboy->clock->internalTick % 0x1200000))
                 dispatch_async(dispatch_get_main_queue(), ^() {
                     [self image:sender];
+                });
+
+            if (!(gameboy->clock->internalTick % 0x48000))
+                dispatch_async(dispatch_get_main_queue(), ^() {
                     [self setBoxes];
                 });
 

@@ -95,12 +95,12 @@ void __GBMemoryManagerWrite(GBMemoryManager *this, UInt16 address, UInt8 byte)
         // high memory
         if (address == 0xFFFF)
         {
-            printf("Changed interrupt status:\n");
+            /*printf("Changed interrupt status:\n");
             printf("VBlank:   %s\n", (byte & 0x01) ? "yes" : "no");
             printf("LCD Stat: %s\n", (byte & 0x02) ? "yes" : "no");
             printf("Timer:    %s\n", (byte & 0x04) ? "yes" : "no");
             printf("Serial:   %s\n", (byte & 0x08) ? "yes" : "no");
-            printf("Joypad:   %s\n", (byte & 0x10) ? "yes" : "no");
+            printf("Joypad:   %s\n", (byte & 0x10) ? "yes" : "no");*/
 
             *this->interruptControl = byte;
         }
@@ -159,11 +159,41 @@ void __GBMemoryManagerTick(GBMemoryManager *this, UInt64 tick)
 
     if (this->mar && this->mdr)
     {
-        if (this->isWrite) {
-            __GBMemoryManagerWrite(this, *this->mar, *this->mdr);
+        if (!(*this->dma)) {
+            if (this->isWrite) {
+                __GBMemoryManagerWrite(this, *this->mar, *this->mdr);
+            } else {
+                (*this->mdr) = __GBMemoryManagerRead(this, *this->mar);
+            }
         } else {
-            *this->mdr = __GBMemoryManagerRead(this, *this->mar);
+            if ((*this->mar) < kGBHighRAMStart)
+            {
+                if (!this->isWrite)
+                    (*this->mdr) = 0xFF;
+
+                (*this->accessed) = true;
+                return;
+            }
+
+            if ((*this->mar) > kGBHighRAMEnd)
+            {
+                if (!this->isWrite)
+                    (*this->mdr) = 0xFF;
+
+                (*this->accessed) = true;
+                return;
+            }
+
+            if (this->isWrite) {
+                __GBMemoryManagerWrite(this, *this->mar, *this->mdr);
+            } else {
+                (*this->mdr) = __GBMemoryManagerRead(this, *this->mar);
+            }
         }
+
+        // Prevent repeated writing while other hardware may modify the *mar byte.
+        this->mar = NULL;
+        this->mdr = NULL;
 
         (*this->accessed) = true;
     }
