@@ -209,6 +209,16 @@ void __GBIOWrite(GBIORegister *this, UInt8 byte)
     GBIOMapperInstallPort(gameboy->mmio, ff01);
 }
 
+- (instancetype) init
+{
+    self = [super init];
+
+    if (self)
+        [self setMainController:[[GBGameboyController alloc] init]];
+
+    return self;
+}
+
 - (void) applicationDidFinishLaunching:(NSNotification *)notification
 {
     [self setBreakTriggered:NO];

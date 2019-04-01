@@ -1,6 +1,9 @@
 #import <Cocoa/Cocoa.h>
+#import "GBGameboyController.h"
 
 @interface GBAppDelegate : NSObject <NSApplicationDelegate>
+
+@property (strong) GBGameboyController *mainController;
 
 - (IBAction) tick:(id)sender;
 - (IBAction) step:(id)sender;
