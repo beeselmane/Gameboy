@@ -1,6 +1,14 @@
 #import <Cocoa/Cocoa.h>
 
-@class GBGameboyInstance;
+@class GBScreenView;
+
+@interface GBScreenWindow : NSWindowController
+
+@property (strong) IBOutlet GBScreenView *screenView;
+
+- (instancetype) init;
+
+@end
 
 @interface GBScreenView : NSOpenGLView
 
@@ -13,8 +21,6 @@
 
 @property (atomic) NSSize newSize;
 @property (atomic) BOOL resized;
-
-@property (strong, atomic) GBGameboyInstance *gameboyInstance;
 
 - (NSData *) loadFile:(NSString *)path;
 - (NSInteger) compileShader:(NSData *)data ofType:(NSInteger)type;
@@ -33,5 +39,3 @@
 - (void) render;
 
 @end
-
-extern CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTimeStamp *time, CVOptionFlags flagsIn, CVOptionFlags *flagsOut, void *context);

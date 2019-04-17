@@ -8,18 +8,16 @@
 
 /* Begin PBXBuildFile section */
 		8B0BD0B122133B1700474FF4 /* dma.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B0BD0AF2213331000474FF4 /* dma.c */; };
+		8B208A9022673F9300D1944B /* GBImageView.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B44BAD422141881001D4318 /* GBImageView.m */; };
 		8B3E99C821F26BE700FA2526 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8B3E99C721F26BE700FA2526 /* Assets.xcassets */; };
 		8B3E99CB21F26BE800FA2526 /* MainMenu.xib in Resources */ = {isa = PBXBuildFile; fileRef = 8B3E99C921F26BE800FA2526 /* MainMenu.xib */; };
 		8B3E99E921F5342000FA2526 /* gameboy.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99E821F5342000FA2526 /* gameboy.c */; };
 		8B3E99EB21F5342500FA2526 /* gameboy.h in Headers */ = {isa = PBXBuildFile; fileRef = 8B3E99EA21F5342400FA2526 /* gameboy.h */; };
 		8B3E99ED21F5343500FA2526 /* main.s in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99EC21F5343500FA2526 /* main.s */; };
 		8B3E99F721F5667B00FA2526 /* libEmulator.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B3E99E121F533C100FA2526 /* libEmulator.dylib */; };
-		8B44BAD522141881001D4318 /* GBGameboyInstance.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B44BAD222141881001D4318 /* GBGameboyInstance.m */; };
 		8B44BAD622141881001D4318 /* GBAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B44BAD322141881001D4318 /* GBAppDelegate.m */; };
-		8B44BAD722141881001D4318 /* GBImageView.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B44BAD422141881001D4318 /* GBImageView.m */; };
 		8B4C28D422060F09005FE36A /* lcd.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B4C28D222060EFD005FE36A /* lcd.c */; };
 		8B4C28D622064014005FE36A /* tetris.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B4C28D522064014005FE36A /* tetris.gb */; };
-		8B6C5C0C22265EDB00CABFBB /* GBGameboyController.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B6C5C0B22265EDB00CABFBB /* GBGameboyController.m */; };
 		8B6C5C0E222680C800CABFBB /* GBFragment.glsl in Resources */ = {isa = PBXBuildFile; fileRef = 8B6C5C0D222680C800CABFBB /* GBFragment.glsl */; };
 		8B6C5C10222680D200CABFBB /* GBVertex.glsl in Resources */ = {isa = PBXBuildFile; fileRef = 8B6C5C0F222680D200CABFBB /* GBVertex.glsl */; };
 		8B86B8A7220CB3C60097AF73 /* 02-interrupts.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B86B89D220CB38F0097AF73 /* 02-interrupts.gb */; };
@@ -34,11 +32,13 @@
 		8B86B8B0220CB3C60097AF73 /* 09-op r,r.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B97627D220CB37B0059F606 /* 09-op r,r.gb */; };
 		8B86B8B1220CB3C60097AF73 /* 10-bit ops.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B97627C220CB37B0059F606 /* 10-bit ops.gb */; };
 		8B86B8B3220CBA280097AF73 /* opus5.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B86B8B2220CBA280097AF73 /* opus5.gb */; };
-		8B8F515F22265A660006BB78 /* GBScreenController.xib in Resources */ = {isa = PBXBuildFile; fileRef = 8B8F515C22265A660006BB78 /* GBScreenController.xib */; };
-		8B8F516022265A660006BB78 /* GBScreenController.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B8F515E22265A660006BB78 /* GBScreenController.m */; };
-		8B8F516322265AE40006BB78 /* GBScreenView.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B8F516222265AE40006BB78 /* GBScreenView.m */; };
 		8B976277220CB09A0059F606 /* drm.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B976275220CB09A0059F606 /* drm.gb */; };
 		8BA00B232203F584009CE00B /* ic.c in Sources */ = {isa = PBXBuildFile; fileRef = 8BA00B222203F584009CE00B /* ic.c */; };
+		8BB4DBEB22602A9400008FD6 /* GBGameboyInstance.m in Sources */ = {isa = PBXBuildFile; fileRef = 8BB4DBEA22602A9400008FD6 /* GBGameboyInstance.m */; };
+		8BB4DBF222602B4E00008FD6 /* GBStateWindow.xib in Resources */ = {isa = PBXBuildFile; fileRef = 8BB4DBEF22602B4E00008FD6 /* GBStateWindow.xib */; };
+		8BB4DBF322602B4E00008FD6 /* GBStateWindow.m in Sources */ = {isa = PBXBuildFile; fileRef = 8BB4DBF122602B4E00008FD6 /* GBStateWindow.m */; };
+		8BB4DC0122602C2500008FD6 /* GBScreen.xib in Resources */ = {isa = PBXBuildFile; fileRef = 8BB4DBFE22602C2500008FD6 /* GBScreen.xib */; };
+		8BB4DC0222602C2500008FD6 /* GBScreen.m in Sources */ = {isa = PBXBuildFile; fileRef = 8BB4DC0022602C2500008FD6 /* GBScreen.m */; };
 		8BEDFBA8220C8C7D00F3F598 /* gamepad.c in Sources */ = {isa = PBXBuildFile; fileRef = 8BEDFBA6220C876900F3F598 /* gamepad.c */; };
 		8BF79B9522058DD5003CAB0D /* bios.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FB21F5690600FA2526 /* bios.c */; };
 		8BF79B9622058DD5003CAB0D /* mmio.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FD21F5701D00FA2526 /* mmio.c */; };
@@ -94,14 +94,10 @@
 		8B430D252201F5FA00DE5302 /* disasm.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = disasm.c; sourceTree = "<group>"; };
 		8B44BACE22141881001D4318 /* GBAppDelegate.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GBAppDelegate.h; sourceTree = "<group>"; };
 		8B44BACF22141881001D4318 /* GBImageView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GBImageView.h; sourceTree = "<group>"; };
-		8B44BAD222141881001D4318 /* GBGameboyInstance.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GBGameboyInstance.m; sourceTree = "<group>"; };
 		8B44BAD322141881001D4318 /* GBAppDelegate.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GBAppDelegate.m; sourceTree = "<group>"; };
 		8B44BAD422141881001D4318 /* GBImageView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GBImageView.m; sourceTree = "<group>"; };
-		8B44BAD82216C459001D4318 /* GBGameboyController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBGameboyController.h; sourceTree = "<group>"; };
 		8B4C28D222060EFD005FE36A /* lcd.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lcd.c; sourceTree = "<group>"; };
 		8B4C28D522064014005FE36A /* tetris.gb */ = {isa = PBXFileReference; lastKnownFileType = file; path = tetris.gb; sourceTree = "<group>"; };
-		8B6C5C0A22265EDB00CABFBB /* GBGameboyInstance.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBGameboyInstance.h; sourceTree = "<group>"; };
-		8B6C5C0B22265EDB00CABFBB /* GBGameboyController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBGameboyController.m; sourceTree = "<group>"; };
 		8B6C5C0D222680C800CABFBB /* GBFragment.glsl */ = {isa = PBXFileReference; lastKnownFileType = text; path = GBFragment.glsl; sourceTree = "<group>"; };
 		8B6C5C0F222680D200CABFBB /* GBVertex.glsl */ = {isa = PBXFileReference; lastKnownFileType = text; path = GBVertex.glsl; sourceTree = "<group>"; };
 		8B86B89D220CB38F0097AF73 /* 02-interrupts.gb */ = {isa = PBXFileReference; lastKnownFileType = file; path = "02-interrupts.gb"; sourceTree = "<group>"; };
@@ -110,11 +106,6 @@
 		8B86B8A0220CB38F0097AF73 /* 11-op a,(hl).gb */ = {isa = PBXFileReference; lastKnownFileType = file; path = "11-op a,(hl).gb"; sourceTree = "<group>"; };
 		8B86B8A1220CB38F0097AF73 /* 08-misc instrs.gb */ = {isa = PBXFileReference; lastKnownFileType = file; path = "08-misc instrs.gb"; sourceTree = "<group>"; };
 		8B86B8B2220CBA280097AF73 /* opus5.gb */ = {isa = PBXFileReference; lastKnownFileType = file; path = opus5.gb; sourceTree = "<group>"; };
-		8B8F515C22265A660006BB78 /* GBScreenController.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = GBScreenController.xib; sourceTree = "<group>"; };
-		8B8F515D22265A660006BB78 /* GBScreenController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBScreenController.h; sourceTree = "<group>"; };
-		8B8F515E22265A660006BB78 /* GBScreenController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBScreenController.m; sourceTree = "<group>"; };
-		8B8F516122265AE40006BB78 /* GBScreenView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBScreenView.h; sourceTree = "<group>"; };
-		8B8F516222265AE40006BB78 /* GBScreenView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBScreenView.m; sourceTree = "<group>"; };
 		8B976275220CB09A0059F606 /* drm.gb */ = {isa = PBXFileReference; lastKnownFileType = file; path = drm.gb; sourceTree = "<group>"; };
 		8B976278220CB37B0059F606 /* 05-op rp.gb */ = {isa = PBXFileReference; lastKnownFileType = file; path = "05-op rp.gb"; sourceTree = "<group>"; };
 		8B976279220CB37B0059F606 /* 03-op sp,hl.gb */ = {isa = PBXFileReference; lastKnownFileType = file; path = "03-op sp,hl.gb"; sourceTree = "<group>"; };
@@ -124,6 +115,14 @@
 		8B97627D220CB37B0059F606 /* 09-op r,r.gb */ = {isa = PBXFileReference; lastKnownFileType = file; path = "09-op r,r.gb"; sourceTree = "<group>"; };
 		8BA00B212203F490009CE00B /* ic.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ic.h; sourceTree = "<group>"; };
 		8BA00B222203F584009CE00B /* ic.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ic.c; sourceTree = "<group>"; };
+		8BB4DBE922602A9400008FD6 /* GBGameboyInstance.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBGameboyInstance.h; sourceTree = "<group>"; };
+		8BB4DBEA22602A9400008FD6 /* GBGameboyInstance.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBGameboyInstance.m; sourceTree = "<group>"; };
+		8BB4DBEF22602B4E00008FD6 /* GBStateWindow.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = GBStateWindow.xib; sourceTree = "<group>"; };
+		8BB4DBF022602B4E00008FD6 /* GBStateWindow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBStateWindow.h; sourceTree = "<group>"; };
+		8BB4DBF122602B4E00008FD6 /* GBStateWindow.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBStateWindow.m; sourceTree = "<group>"; };
+		8BB4DBFE22602C2500008FD6 /* GBScreen.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = GBScreen.xib; sourceTree = "<group>"; };
+		8BB4DBFF22602C2500008FD6 /* GBScreen.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBScreen.h; sourceTree = "<group>"; };
+		8BB4DC0022602C2500008FD6 /* GBScreen.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBScreen.m; sourceTree = "<group>"; };
 		8BEDFBA6220C876900F3F598 /* gamepad.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = gamepad.c; sourceTree = "<group>"; };
 		8BF79B9322058A55003CAB0D /* clock.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = clock.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -174,7 +173,8 @@
 				8B44BAD122141881001D4318 /* source */,
 				8B3E99C721F26BE700FA2526 /* Assets.xcassets */,
 				8B3E99C921F26BE800FA2526 /* MainMenu.xib */,
-				8B8F515C22265A660006BB78 /* GBScreenController.xib */,
+				8BB4DBEF22602B4E00008FD6 /* GBStateWindow.xib */,
+				8BB4DBFE22602C2500008FD6 /* GBScreen.xib */,
 				8B3E99CC21F26BE800FA2526 /* Info.plist */,
 				8B3E99CF21F26BE800FA2526 /* Gameboy.entitlements */,
 				8B3E99EC21F5343500FA2526 /* main.s */,
@@ -247,11 +247,10 @@
 			isa = PBXGroup;
 			children = (
 				8B44BACE22141881001D4318 /* GBAppDelegate.h */,
+				8BB4DBE922602A9400008FD6 /* GBGameboyInstance.h */,
 				8B44BACF22141881001D4318 /* GBImageView.h */,
-				8B44BAD82216C459001D4318 /* GBGameboyController.h */,
-				8B8F515D22265A660006BB78 /* GBScreenController.h */,
-				8B6C5C0A22265EDB00CABFBB /* GBGameboyInstance.h */,
-				8B8F516122265AE40006BB78 /* GBScreenView.h */,
+				8BB4DBFF22602C2500008FD6 /* GBScreen.h */,
+				8BB4DBF022602B4E00008FD6 /* GBStateWindow.h */,
 			);
 			path = headers;
 			sourceTree = "<group>";
@@ -259,12 +258,11 @@
 		8B44BAD122141881001D4318 /* source */ = {
 			isa = PBXGroup;
 			children = (
-				8B8F515E22265A660006BB78 /* GBScreenController.m */,
-				8B8F516222265AE40006BB78 /* GBScreenView.m */,
-				8B6C5C0B22265EDB00CABFBB /* GBGameboyController.m */,
-				8B44BAD222141881001D4318 /* GBGameboyInstance.m */,
 				8B44BAD322141881001D4318 /* GBAppDelegate.m */,
+				8BB4DBEA22602A9400008FD6 /* GBGameboyInstance.m */,
 				8B44BAD422141881001D4318 /* GBImageView.m */,
+				8BB4DC0022602C2500008FD6 /* GBScreen.m */,
+				8BB4DBF122602B4E00008FD6 /* GBStateWindow.m */,
 			);
 			path = source;
 			sourceTree = "<group>";
@@ -383,12 +381,12 @@
 				8B976277220CB09A0059F606 /* drm.gb in Resources */,
 				8B4C28D622064014005FE36A /* tetris.gb in Resources */,
 				8B3E99C821F26BE700FA2526 /* Assets.xcassets in Resources */,
+				8BB4DC0122602C2500008FD6 /* GBScreen.xib in Resources */,
 				8B3E99CB21F26BE800FA2526 /* MainMenu.xib in Resources */,
 				8B6C5C0E222680C800CABFBB /* GBFragment.glsl in Resources */,
 				8B86B8A7220CB3C60097AF73 /* 02-interrupts.gb in Resources */,
 				8B86B8A8220CB3C60097AF73 /* 04-op r,imm.gb in Resources */,
 				8B86B8A9220CB3C60097AF73 /* 07-jr,jp,call,ret,rst.gb in Resources */,
-				8B8F515F22265A660006BB78 /* GBScreenController.xib in Resources */,
 				8B86B8AA220CB3C60097AF73 /* 08-misc instrs.gb in Resources */,
 				8B86B8AB220CB3C60097AF73 /* 11-op a,(hl).gb in Resources */,
 				8B86B8AC220CB3C60097AF73 /* 01-special.gb in Resources */,
@@ -396,6 +394,7 @@
 				8B6C5C10222680D200CABFBB /* GBVertex.glsl in Resources */,
 				8B86B8B3220CBA280097AF73 /* opus5.gb in Resources */,
 				8B86B8AE220CB3C60097AF73 /* 05-op rp.gb in Resources */,
+				8BB4DBF222602B4E00008FD6 /* GBStateWindow.xib in Resources */,
 				8B86B8AF220CB3C60097AF73 /* 06-ld r,r.gb in Resources */,
 				8B86B8B0220CB3C60097AF73 /* 09-op r,r.gb in Resources */,
 				8B86B8B1220CB3C60097AF73 /* 10-bit ops.gb in Resources */,
@@ -409,13 +408,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8B44BAD522141881001D4318 /* GBGameboyInstance.m in Sources */,
+				8B208A9022673F9300D1944B /* GBImageView.m in Sources */,
+				8BB4DC0222602C2500008FD6 /* GBScreen.m in Sources */,
+				8BB4DBEB22602A9400008FD6 /* GBGameboyInstance.m in Sources */,
+				8BB4DBF322602B4E00008FD6 /* GBStateWindow.m in Sources */,
 				8B44BAD622141881001D4318 /* GBAppDelegate.m in Sources */,
-				8B8F516322265AE40006BB78 /* GBScreenView.m in Sources */,
-				8B6C5C0C22265EDB00CABFBB /* GBGameboyController.m in Sources */,
-				8B8F516022265A660006BB78 /* GBScreenController.m in Sources */,
 				8B3E99ED21F5343500FA2526 /* main.s in Sources */,
-				8B44BAD722141881001D4318 /* GBImageView.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

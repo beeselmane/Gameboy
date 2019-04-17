@@ -2,8 +2,7 @@
 
 struct __GBGameboy;
 
-// Interface class to libGameboy
-@interface GBGameboyInstance : NSDocument
+@interface GBGameboyInstance : NSObject
 {
     struct __GBGameboy *gameboy;
 }
@@ -11,6 +10,14 @@ struct __GBGameboy;
 @property (readonly) BOOL cartInstalled;
 @property (readonly) UInt32 *screen;
 
+- (instancetype) init;
+
+- (void) installCartFromFile:(NSString *)path;
+- (void) installCartFromData:(NSData *)data;
+
 - (void) tick:(NSUInteger)times;
+
+- (NSImage *) generateBitmap:(UInt8)map isHighMap:(bool)isHighMap;
+- (NSImage *) tileset;
 
 @end

@@ -1,6 +1,15 @@
 #import "GBGameboyInstance.h"
-#import "GBScreenController.h"
 #import "gameboy.h"
+
+#define kGBTileCount            384
+#define kGBTileHeight           8
+#define kGBTileWidth            8
+
+#define kGBTilesetOffset        0
+#define kGBBackground0Offset    0x1C00
+#define kGBBackground1Offset    0x1800
+
+#define kGBBackgroundTileCount  32
 
 __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGOriginalROM[0x100] = {
     0x31, 0xFE, 0xFF, 0xAF, 0x21, 0xFF, 0x9F, 0x32, 0xCB, 0x7C, 0x20, 0xFB, 0x21, 0x26, 0xFF, 0x0E,
@@ -40,14 +49,23 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
     0xF5, 0x06, 0x19, 0x78, 0x86, 0x23, 0x05, 0x20, 0xFB, 0x86, 0x00, 0x00, 0x3E, 0x01, 0xE0, 0x50
 };
 
-@implementation GBGameboyInstance
+@interface GBGameboyInstance ()
 
-@synthesize cartInstalled = _cartInstalled;
+- (NSBitmapImageRep *) makeBitmapImageOfWidth:(UInt32)width height:(UInt32) height;
+
+- (NSImage *) decodeTileset:(UInt8 *)source into:(UInt32 [kGBTileCount][kGBTileWidth * kGBTileHeight])result needsImage:(bool)needsImage;
+- (void) decodeTile:(UInt8 *)tileSource into:(UInt32 [kGBTileWidth * kGBTileHeight])result;
+
+@end
+
+@implementation GBGameboyInstance
 
 @dynamic screen;
 
-- (void) initGeneral
+- (instancetype) init
 {
+    self = [super init];
+
     if (self)
     {
         self->gameboy = GBGameboyCreate();
@@ -61,78 +79,28 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
 
         _cartInstalled = false;
     }
-}
-
-- (instancetype) initWithContentsOfURL:(NSURL *)url ofType:(NSString *)typeName error:(NSError * _Nullable __autoreleasing *)outError
-{
-    self = [super initWithContentsOfURL:url ofType:typeName error:outError];
-
-    if (!self->gameboy)
-        [self initGeneral];
 
     return self;
 }
 
-- (instancetype) initWithType:(NSString *)typeName error:(NSError * _Nullable __autoreleasing *)outError
+- (void) installCartFromFile:(NSString *)path
 {
-    self = [super initWithType:typeName error:outError];
-
-    if (!self->gameboy)
-        [self initGeneral];
-
-    return self;
+    return [self installCartFromData:[[NSFileManager defaultManager] contentsAtPath:path]];
 }
 
-- (void) makeWindowControllers
+- (void) installCartFromData:(NSData *)data
 {
-    GBScreenController *screenController = [[GBScreenController alloc] initWithInstance:self];
-    [self addWindowController:screenController];
-}
-
-/*
-- (NSString *)windowNibName {
-    // Override returning the nib file name of the document
-    // If you need to use a subclass of NSWindowController or if your document supports multiple NSWindowControllers, you should remove this method and override -makeWindowControllers instead.
-    return <#nibName#>;
-}
-*/
-
-- (BOOL) readFromData:(NSData *)data ofType:(NSString *)typeName error:(NSError **)error
-{
-    if (!self->gameboy)
-        [self initGeneral];
-
     GBCartridge *cart = GBCartridgeCreate((UInt8 *)[data bytes], (UInt32)[data length]);
 
-    NSDictionary *errorDescription = @{
-        NSLocalizedDescriptionKey : @"Error loading ROM file",
-        NSLocalizedFailureReasonErrorKey : @"An error occurred loading the ROM file selected.",
-        NSLocalizedRecoverySuggestionErrorKey: @"Are you sure this is a valid ROM?"
-    };
-
     if (!cart)
-    {
-        (*error) = [NSError errorWithDomain:@"com.beeselmane.errorDomain" code:42 userInfo:errorDescription];
-
-        return NO;
-    }
+        return;
 
     bool inserted = GBCartridgeInsert(cart, self->gameboy);
 
     if (!inserted)
-    {
-        (*error) = [NSError errorWithDomain:@"com.beeselmane.errorDomain" code:42 userInfo:errorDescription];
+        return;
 
-        return NO;
-    }
-
-    GBGameboyPowerOn(self->gameboy);
-    return YES;
-}
-
-+ (BOOL) autosavesInPlace
-{
-    return NO;
+    _cartInstalled = YES;
 }
 
 - (UInt32 *) screen
@@ -146,12 +114,148 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
     //    GBClockTick(self->gameboy->clock);
 
     /*if (times & 1) {
-        for (UInt32 i = 0; i < kGBScreenHeight * kGBScreenWidth; i++)
-            self->gameboy->driver->screenData[i] = 0xFF229922;
-    } else {
-        for (UInt32 i = 0; i < kGBScreenHeight * kGBScreenWidth; i++)
-            self->gameboy->driver->screenData[i] = 0xFF992299;
-    }*/
+     for (UInt32 i = 0; i < kGBScreenHeight * kGBScreenWidth; i++)
+     self->gameboy->driver->screenData[i] = 0xFF229922;
+     } else {
+     for (UInt32 i = 0; i < kGBScreenHeight * kGBScreenWidth; i++)
+     self->gameboy->driver->screenData[i] = 0xFF992299;
+     }*/
 }
+
+#pragma mark - Background/Palette Image Routines
+
+- (NSBitmapImageRep *) makeBitmapImageOfWidth:(UInt32)width height:(UInt32) height
+{
+    NSBitmapImageRep *bitmapImage = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:nil
+                                                                            pixelsWide:width
+                                                                            pixelsHigh:height
+                                                                         bitsPerSample:8
+                                                                       samplesPerPixel:3
+                                                                              hasAlpha:NO
+                                                                              isPlanar:NO
+                                                                        colorSpaceName:NSCalibratedRGBColorSpace
+                                                                           bytesPerRow:(width * 4)
+                                                                          bitsPerPixel:32];
+    return bitmapImage;
+}
+
+- (void) decodeTile:(UInt8 *)tileSource into:(UInt32 [kGBTileWidth * kGBTileHeight])result
+{
+    UInt32 lookup[4] = {0xEEEEEE, 0x000000, 0x555555, 0xBBBBBB};
+
+    for (UInt8 y = 0; y < (2 * kGBTileHeight); y += 2)
+    {
+        for (UInt8 x = 0; x < kGBTileWidth; x++)
+        {
+            UInt8 value = ((tileSource[y + 1] >> x) << 1) & 2;
+            value |= (tileSource[y] >> x) & 1;
+
+            result[(y * 4) + (7 - x)] = lookup[value];
+        }
+    }
+}
+
+- (NSBitmapImageRep *) decodeTileset:(UInt8 *)source into:(UInt32 [kGBTileCount][kGBTileWidth * kGBTileHeight])result needsImage:(bool)needsImage
+{
+     NSBitmapImageRep *image = [self makeBitmapImageOfWidth:128 height:192];
+
+     for (UInt16 i = 0; i < kGBTileCount; i++)
+     {
+         [self decodeTile:&source[i * (2 * kGBTileHeight)] into:result[i]];
+
+         if (needsImage)
+         {
+             UInt16 y = i / (2 * kGBTileHeight);
+             UInt16 x = i % (2 * kGBTileWidth);
+
+             for (UInt8 y0 = 0; y0 < kGBTileHeight; y0++)
+             {
+                 for (UInt8 x0 = 0; x0 < kGBTileWidth; x0++)
+                 {
+                     NSUInteger color = result[i][(y0 * kGBTileHeight) + x0];
+
+                     NSUInteger rgb[3] = {
+                         (color >> 16) & 0xFF,
+                         (color >>  8) & 0xFF,
+                         (color >>  0) & 0xFF
+                     };
+
+                     [image setPixel:rgb atX:((x * kGBTileWidth) + x0) y:((y * kGBTileHeight) + y0)];
+                 }
+             }
+         }
+     }
+
+    return image;
+}
+
+- (NSImage *) tileset
+{
+    UInt32 tiles[kGBTileCount][kGBTileWidth * kGBTileHeight];
+    UInt8 *tileset = &gameboy->vram->memory[0];
+
+    return [self decodeTileset:tileset into:tiles needsImage:YES];
+}
+
+- (NSImage *) generateBitmap:(UInt8)map isHighMap:(bool)isHighMap
+{
+    bool isFirstMap = !map;
+
+    UInt8 *sourceData = &gameboy->vram->memory[isFirstMap ? kGBBackground0Offset : kGBBackground1Offset];
+    UInt8 *tileset = &gameboy->vram->memory[0];
+
+    UInt32 tiles[kGBTileCount][kGBTileWidth * kGBTileHeight];
+    [self decodeTileset:tileset into:tiles needsImage:NO];
+
+    NSBitmapImageRep *image = [self makeBitmapImageOfWidth:(kGBBackgroundTileCount * kGBTileWidth) height:(kGBBackgroundTileCount * kGBTileHeight)];
+
+    for (UInt8 y = 0; y < kGBBackgroundTileCount; y++)
+    {
+        for (UInt8 x = 0; x < kGBBackgroundTileCount; x++)
+        {
+            UInt8 tile;
+
+            if (isHighMap) {
+                SInt8 tid = (y * kGBBackgroundTileCount) + x;
+
+                // -128 ---  0  --- +127
+                //   0  --- 128 ---  255
+                tile = sourceData[tid + 128];
+            } else {
+                tile = sourceData[(y * kGBBackgroundTileCount) + x];
+            }
+
+
+            for (UInt8 y0 = 0; y0 < kGBTileHeight; y0++)
+            {
+                for (UInt8 x0 = 0; x0 < kGBTileWidth; x0++)
+                {
+                    NSUInteger color = tiles[tile][(y0 * kGBTileHeight) + x0];
+
+                    NSUInteger rgb[3] = {
+                        (color >> 16) & 0xFF,
+                        (color >>  8) & 0xFF,
+                        (color >>  0) & 0xFF
+                    };
+
+                    [image setPixel:rgb atX:((x * kGBTileWidth) + x0) y:((y * kGBTileHeight) + y0)];
+                }
+
+            }
+        }
+    }
+
+    return [[NSImage alloc] initWithCGImage:[image CGImage] size:NSMakeSize((kGBBackgroundTileCount * kGBTileWidth), (kGBBackgroundTileCount * kGBTileHeight))];
+}
+
+#if 0
+
+    UInt8 control = gameboy->mmio->portMap[0x40]->value;
+    bool highmap = control & 0x10;
+
+    //UInt32 map1data[32 * 32 * 8 * 8];
+    //UInt32 map0data[32 * 32 * 8 * 8];
+
+#endif
 
 @end

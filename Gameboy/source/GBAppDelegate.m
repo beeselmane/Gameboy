@@ -1,5 +1,43 @@
 #import "GBAppDelegate.h"
 
+#import "GBGameboyInstance.h"
+#import "GBScreen.h"
+
+@implementation GBAppDelegate
+
+@synthesize screenWindow = _screenWindow;
+@synthesize gameboy = _gameboy;
+
++ (instancetype) instance
+{
+    return (GBAppDelegate *)[NSApp delegate];
+}
+
+- (void) applicationWillFinishLaunching:(NSNotification *)notification
+{
+    _screenWindow = [[GBScreenWindow alloc] init];
+    _gameboy = [[GBGameboyInstance alloc] init];
+}
+
+- (void) applicationDidFinishLaunching:(NSNotification *)notification
+{
+    [[self screenWindow] showWindow:self];
+}
+
+@end
+
+// Gameboy - title
+// title - Registers
+// title - Video memory
+// title - ROM/RAM/VRAM
+// title - I/O Ports
+// title - Sprites
+
+// Default title on Gameboy is empty. Otherwise it's "[No Game]"
+
+
+#if 0
+
 #import "gameboy.h"
 #import "disasm.h"
 
@@ -396,162 +434,6 @@ void __GBIOWrite(GBIORegister *this, UInt8 byte)
     });
 }
 
-- (NSBitmapImageRep *) makeBitmapImageOfWidth:(UInt32)width height:(UInt32) height
-{
-    NSBitmapImageRep *bitmapImage = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:nil
-                                                                            pixelsWide:width
-                                                                            pixelsHigh:height
-                                                                         bitsPerSample:8
-                                                                       samplesPerPixel:3
-                                                                              hasAlpha:NO
-                                                                              isPlanar:NO
-                                                                        colorSpaceName:NSCalibratedRGBColorSpace
-                                                                           bytesPerRow:(width * 4)
-                                                                          bitsPerPixel:32];
-
-    //memcpy([bitmapImage bitmapData], rgbData, width * height * sizeof(UInt32));
-
-    //return [[NSImage alloc] initWithCGImage:[bitmapImage CGImage] size:NSMakeSize(width, height)];
-    return bitmapImage;
-}
-
-- (void) decodeTile:(UInt8 *)tileSource into:(UInt32 [8 * 8])result
-{
-    UInt32 lookup[4] = {0xEEEEEE, 0x000000, 0x555555, 0xBBBBBB};
-
-    for (UInt8 y = 0; y < 0x10; y += 2)
-    {
-        for (UInt8 x = 0; x < 0x8; x++)
-        {
-            UInt8 value = ((tileSource[y + 1] >> x) << 1) & 2;
-            value |= (tileSource[y] >> x) & 1;
-
-            result[(y * 4) + (7 - x)] = lookup[value];
-        }
-    }
-}
-
-- (IBAction) image:(id)sender
-{
-    UInt8 control = gameboy->mmio->portMap[0x40]->value;
-    bool highmap = control & 0x10;
-
-    UInt8 *map1src = &gameboy->vram->memory[0x1800];
-    UInt8 *map0src = &gameboy->vram->memory[0x1C00];
-    UInt8 *tileset = &gameboy->vram->memory[0];
-
-    //UInt32 map1data[32 * 32 * 8 * 8];
-    //UInt32 map0data[32 * 32 * 8 * 8];
-    NSBitmapImageRep *tileImage = [self makeBitmapImageOfWidth:128 height:192];
-    UInt32 tiles[384][8 * 8];
-
-    for (UInt16 i = 0; i < 384; i++)
-    {
-        [self decodeTile:&tileset[i * 0x10] into:tiles[i]];
-
-        UInt16 y = i / 16;
-        UInt16 x = i % 16;
-
-        for (UInt8 y0 = 0; y0 < 8; y0++)
-        {
-            for (UInt8 x0 = 0; x0 < 8; x0++)
-            {
-                NSUInteger color = tiles[i][(y0 * 8) + x0];
-
-                NSUInteger rgb[3] = {
-                    (color >> 16) & 0xFF,
-                    (color >>  8) & 0xFF,
-                    (color >>  0) & 0xFF
-                };
-
-                [tileImage setPixel:rgb atX:((x * 8) + x0) y:((y * 8) + y0)];
-            }
-        }
-    }
-
-    [_paletteImage setImage:[[NSImage alloc] initWithCGImage:[tileImage CGImage] size:NSMakeSize(128, 192)]];
-
-    NSBitmapImageRep *map1img = [self makeBitmapImageOfWidth:256 height:256];
-
-    for (UInt8 y = 0; y < 32; y++)
-    {
-        for (UInt8 x = 0; x < 32; x++)
-        {
-            UInt8 tile;
-
-            if (highmap) {
-                SInt8 tid = (y * 32) + x;
-
-                // -128 ---  0  --- +127
-                //   0  --- 128 ---  255
-                tile = map1src[tid + 128];
-            } else {
-                tile = map1src[(y * 32) + x];
-            }
-
-
-            for (UInt8 y0 = 0; y0 < 8; y0++)
-            {
-                for (UInt8 x0 = 0; x0 < 8; x0++)
-                {
-                    NSUInteger color = tiles[tile][(y0 * 8) + x0];
-
-                    NSUInteger rgb[3] = {
-                        (color >> 16) & 0xFF,
-                        (color >>  8) & 0xFF,
-                        (color >>  0) & 0xFF
-                    };
-
-                    [map1img setPixel:rgb atX:((x * 8) + x0) y:((y * 8) + y0)];
-                }
-
-            }
-        }
-    }
-
-    [_bgImage1 setImage:[[NSImage alloc] initWithCGImage:[map1img CGImage] size:NSMakeSize(256, 256)]];
-
-    NSBitmapImageRep *map0img = [self makeBitmapImageOfWidth:256 height:256];
-
-    for (UInt8 y = 0; y < 32; y++)
-    {
-        for (UInt8 x = 0; x < 32; x++)
-        {
-            UInt8 tile;
-
-            if (highmap) {
-                SInt8 tid = (y * 32) + x;
-
-                // -128 ---  0  --- +127
-                //   0  --- 128 ---  255
-                tile = map1src[tid + 128];
-            } else {
-                tile = map0src[(y * 32) + x];
-            }
-
-
-            for (UInt8 y0 = 0; y0 < 8; y0++)
-            {
-                for (UInt8 x0 = 0; x0 < 8; x0++)
-                {
-                    NSUInteger color = tiles[tile][(y0 * 8) + x0];
-
-                    NSUInteger rgb[3] = {
-                        (color >> 16) & 0xFF,
-                        (color >>  8) & 0xFF,
-                        (color >>  0) & 0xFF
-                    };
-
-                    [map0img setPixel:rgb atX:((x * 8) + x0) y:((y * 8) + y0)];
-                }
-
-            }
-        }
-    }
-
-    [_bgImage0 setImage:[[NSImage alloc] initWithCGImage:[map0img CGImage] size:NSMakeSize(256, 256)]];
-}
-
 - (IBAction) breakProgram:(id)sender
 {
     _breakTriggered = YES;
@@ -585,3 +467,5 @@ void __GBIOWrite(GBIORegister *this, UInt8 byte)
 
 // Each main window is attached to a single emulator instance. You can run multiple at a time, I suppose...
 //
+
+#endif

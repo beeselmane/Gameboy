@@ -1,7 +1,10 @@
-#import "GBScreenView.h"
+#import "GBScreen.h"
 #import "GBGameboyInstance.h"
+#import "GBAppDelegate.h"
 
 #import <OpenGL/gl3.h>
+
+extern CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTimeStamp *time, CVOptionFlags flagsIn, CVOptionFlags *flagsOut, void *context);
 
 CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTimeStamp *time, CVOptionFlags flagsIn, CVOptionFlags *flagsOut, void *context)
 {
@@ -19,6 +22,24 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
 
 @end
 
+@implementation GBScreenWindow
+
+@synthesize screenView = _screenView;
+
+- (instancetype) init
+{
+    return (self = [self initWithWindowNibName:@"GBScreen"]);
+}
+
+- (void) windowDidLoad
+{
+    [super windowDidLoad];
+    
+    [[self screenView] setup];
+}
+
+@end
+
 @implementation GBScreenView
 
 @synthesize displayLink = _displayLink;
@@ -31,7 +52,6 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
 @synthesize newSize = _newSize;
 @synthesize resized = _resized;
 
-@synthesize gameboyInstance = _gameboyInstance;
 @synthesize vertexArray = _vertexArray;
 @synthesize texture = _texture;
 
@@ -189,9 +209,9 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
     NSAssert(fragmentShader && vertexShader, @"Could not find OpenGL shaders!");
 
     self->_shaderProgram = [self createShaderProgram:@{
-        @GL_FRAGMENT_SHADER : fragmentShader,
-        @GL_VERTEX_SHADER   : vertexShader
-    }];
+                                                       @GL_FRAGMENT_SHADER : fragmentShader,
+                                                       @GL_VERTEX_SHADER   : vertexShader
+                                                       }];
 
     NSAssert([self shaderProgram] != -1, @"Error compiling OpenGL shaders!");
 
@@ -201,7 +221,7 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
     glGenTextures(1, (GLuint *)&_texture);
     glBindTexture(GL_TEXTURE_2D, (GLuint)[self texture]);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, 160, 144, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, [[self gameboyInstance] screen]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, 160, 144, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, [[[GBAppDelegate instance] gameboy] screen]);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -223,11 +243,11 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
     CGFloat cps = 4194304;
     CGFloat ticks = cps * [self frameDelta];
 
-    [[self gameboyInstance] tick:(NSUInteger)ticks];
+    [[[GBAppDelegate instance] gameboy] tick:(NSUInteger)ticks];
     glBindVertexArray((GLuint)[self vertexArray]);
 
     glActiveTexture(GL_TEXTURE0);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 160, 144, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, [[self gameboyInstance] screen]);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 160, 144, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, [[[GBAppDelegate instance] gameboy] screen]);
     glDrawArrays(GL_TRIANGLES, 0, 3);
 }
 

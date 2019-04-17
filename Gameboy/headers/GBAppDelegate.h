@@ -1,7 +1,16 @@
 #import <Cocoa/Cocoa.h>
-#import "GBGameboyController.h"
+
+@class GBGameboyInstance;
+@class GBScreenWindow;
 
 @interface GBAppDelegate : NSObject <NSApplicationDelegate>
+
+@property (strong) GBGameboyInstance *gameboy;
+@property (strong) GBScreenWindow *screenWindow;
+
++ (instancetype) instance;
+
+#if 0
 
 @property (strong) GBGameboyController *mainController;
 
@@ -45,5 +54,7 @@
 @property (weak) IBOutlet NSImageView *bgImage0;
 @property (weak) IBOutlet NSImageView *bgImage1;
 @property (weak) IBOutlet NSImageView *paletteImage;
+
+#endif
 
 @end
