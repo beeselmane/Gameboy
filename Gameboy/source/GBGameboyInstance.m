@@ -110,8 +110,8 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
 
 - (void) tick:(NSUInteger)times
 {
-    //for (NSUInteger i = 0; i < times; i++)
-    //    GBClockTick(self->gameboy->clock);
+    for (NSUInteger i = 0; i < times; i++)
+        GBClockTick(self->gameboy->clock);
 
     /*if (times & 1) {
      for (UInt32 i = 0; i < kGBScreenHeight * kGBScreenWidth; i++)

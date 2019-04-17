@@ -180,12 +180,18 @@ void __GBLCDControlPortWrite(GBLCDControlPort *this, UInt8 byte)
         this->driver->displayOn = false;
 
         fprintf(stderr, "Note: Turned off display.\n");
+
+        // TODO: Set display to this->driver->nullColor
+        memset(this->driver->screenData, 0x00, kGBScreenWidth * kGBScreenHeight * sizeof(UInt32));
     } else {
         this->driver->driverMode = kGBDriverStateSpriteSearch;
         this->driver->driverModeTicks = 0;
         this->driver->displayOn = true;
 
         fprintf(stderr, "Note: Turned on display.\n");
+
+        // TODO: Set display to lookup index 0
+        memset(this->driver->screenData, 0x00, kGBScreenWidth * kGBScreenHeight * sizeof(UInt32));
     }
 }
 
@@ -349,6 +355,9 @@ GBGraphicsDriver *GBGraphicsDriverCreate(void)
         driver->spriteIndex = 0;
         driver->driverX = 0;
 
+        driver->nullColor = 0x00000000;
+        driver->screenIndex = 0;
+
         driver->tick = __GBGraphicsDriverTick;
         driver->install = __GBGraphicsDriverInstall;
     }
@@ -469,6 +478,10 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
         case kGBDriverStatePixelTransfer: {
 
             // TODO: Transfer pixels if we can
+            if (this->screenIndex >= (kGBScreenHeight * kGBScreenWidth))
+                this->screenIndex = 0;
+
+            this->screenData[this->screenIndex++] += 0x01010100;
             this->fifoPosition++;
 
             if (this->fifoPosition == kGBScreenWidth)

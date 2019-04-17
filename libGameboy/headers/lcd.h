@@ -204,6 +204,8 @@ typedef struct __GBGraphicsDriver {
 
     UInt32 screenData[kGBScreenHeight * kGBScreenWidth];
     UInt32 colorLookup[4];
+    UInt32 screenIndex;
+    UInt32 nullColor;
 
     UInt8 fifoBuffer[16]; // Pixel palette values + palette number (low byte is palette low, high byte is color index)
     UInt8 fifoPosition;
