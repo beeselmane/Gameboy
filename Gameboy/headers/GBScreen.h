@@ -2,7 +2,7 @@
 
 @class GBScreenView;
 
-@interface GBScreenWindow : NSWindowController
+@interface GBScreenWindow : NSWindowController <NSWindowDelegate>
 
 @property (strong) IBOutlet GBScreenView *screenView;
 

@@ -1,5 +1,6 @@
 #import "GBGameboyInstance.h"
 #import "gameboy.h"
+#import "disasm.h"
 
 #define kGBTileCount            384
 #define kGBTileHeight           8
@@ -60,6 +61,13 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
 
 @implementation GBGameboyInstance
 
+@synthesize breakpointAddress = _breakpointAddress;
+@synthesize breakpointActive = _breakpointActive;
+
+@synthesize isRunning = _isRunning;
+
+@dynamic currentOpcode;
+@dynamic cpuMode;
 @dynamic screen;
 
 - (instancetype) init
@@ -75,13 +83,14 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
         NSAssert(self->gameboy, @"Error: Could not instantiate gameboy ROM!");
 
         GBGameboyInstallBIOS(self->gameboy, bios);
-        GBGameboyPowerOn(self->gameboy);
 
         _cartInstalled = false;
     }
 
     return self;
 }
+
+#pragma mark - ROM Loading
 
 - (void) installCartFromFile:(NSString *)path
 {
@@ -100,7 +109,41 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
     if (!inserted)
         return;
 
+    GBGameboyPowerOn(self->gameboy);
     _cartInstalled = YES;
+
+    [self setIsRunning:YES];
+}
+
+#pragma mark - Instance Variables
+
+- (NSString *) currentOpcode
+{
+    UInt16 pc = self->gameboy->cpu->state.pc;
+
+    UInt8 buffer[3] = {
+        [self read:pc + 0],
+        [self read:pc + 1],
+        [self read:pc + 2]
+    };
+
+    GBDisassemblyInfo *info = GBDisassembleSingle(buffer, 3, NULL);
+    NSString *result = @"<?????>";
+
+    if (info)
+    {
+        result = [NSString stringWithUTF8String:info->string];
+
+        free(info->string);
+        free(info);
+    }
+
+    return result;
+}
+
+- (SInt8) cpuMode
+{
+    return self->gameboy->cpu->state.mode;
 }
 
 - (UInt32 *) screen
@@ -108,18 +151,30 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
     return self->gameboy->driver->screenData;
 }
 
+#pragma mark - Basic Functions
+
 - (void) tick:(NSUInteger)times
 {
-    for (NSUInteger i = 0; i < times; i++)
-        GBClockTick(self->gameboy->clock);
+    if (![self isRunning])
+        return;
 
-    /*if (times & 1) {
-     for (UInt32 i = 0; i < kGBScreenHeight * kGBScreenWidth; i++)
-     self->gameboy->driver->screenData[i] = 0xFF229922;
-     } else {
-     for (UInt32 i = 0; i < kGBScreenHeight * kGBScreenWidth; i++)
-     self->gameboy->driver->screenData[i] = 0xFF992299;
-     }*/
+    for (NSUInteger i = 0; i < times; i++)
+        [self singleTick];
+}
+
+- (void) singleTick
+{
+    GBClockTick(self->gameboy->clock);
+}
+
+- (void) powerOn
+{
+    GBGameboyPowerOn(self->gameboy);
+}
+
+- (UInt8) read:(UInt16)address
+{
+    return __GBMemoryManagerRead(gameboy->cpu->mmu, address);
 }
 
 #pragma mark - Background/Palette Image Routines
@@ -257,5 +312,74 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
     //UInt32 map0data[32 * 32 * 8 * 8];
 
 #endif
+
+#pragma mark - Disassembler Utilities
+
+- (GBDisassemblyInfo **) disassemble:(UInt8 *)code ofSize:(UInt32)size count:(UInt32 *)count
+{
+    return GBDisassemblerProcess(code, size, count);
+}
+
+- (void) outputDisassembly:(GBDisassemblyInfo **)code atBase:(UInt32)base count:(UInt32)count
+{
+    if (!code || !code[0])
+        return;
+
+    for (UInt32 i = 0; i < count; i++)
+        fprintf(stdout, "0x%04X: %s\n", base + code[i]->offset, code[i]->string);
+}
+
+- (void) freeDisassembly:(GBDisassemblyInfo **)code count:(UInt32)count
+{
+    for (UInt32 i = 0; i < count; i++)
+    {
+        free(code[i]->string);
+        free(code[i]);
+    }
+
+    free(code);
+}
+
+#pragma mark - Debug Routines
+
+static GBIORegister *dbg_ff01, *dbg_ff02;
+
+static void __GBIOWrite(GBIORegister *this, UInt8 byte)
+{
+    if (byte == 0x81)
+        fprintf(stdout, "%c", dbg_ff01->value);
+}
+
+- (void) installDebugSerial
+{
+    dbg_ff01 = malloc(sizeof(GBIORegister));
+    dbg_ff02 = malloc(sizeof(GBIORegister));
+
+    dbg_ff01->address = 0xFF01;
+
+    dbg_ff01->write = __GBIORegisterSimpleWrite;
+    dbg_ff01->read = __GBIORegisterSimpleRead;
+
+    dbg_ff02->address = 0xFF02;
+
+    dbg_ff02->read = __GBIORegisterSimpleRead;
+    dbg_ff02->write = __GBIOWrite;
+
+    GBIOMapperInstallPort(gameboy->mmio, dbg_ff02);
+    GBIOMapperInstallPort(gameboy->mmio, dbg_ff01);
+}
+
+- (void) dumpBootROM
+{
+    UInt32 count;
+
+    GBDisassemblyInfo **disasm = [self disassemble:gGBDMGOriginalROM ofSize:0xA8 count:&count];
+    [self outputDisassembly:disasm atBase:0x0000 count:count];
+    [self freeDisassembly:disasm count:count];
+
+    disasm = [self disassemble:(gGBDMGOriginalROM + 0xE0) ofSize:0x20 count:&count];
+    [self outputDisassembly:disasm atBase:0x00E0 count:count];
+    [self freeDisassembly:disasm count:count];
+}
 
 @end

@@ -9,7 +9,7 @@ GBIORegister *gGBIOMapperNullPorts[(kGBIOMapperFinalAddress - kGBIOMapperFirstAd
 
 void __GBIORegisterNullWrite(GBIORegister *reg, UInt8 byte)
 {
-    fprintf(stderr, "Warning: Attempt to write byte '0x%02X' to nonexistant I/O Port '0x%04X'\n", byte, reg->address);
+    //fprintf(stderr, "Warning: Attempt to write byte '0x%02X' to nonexistant I/O Port '0x%04X'\n", byte, reg->address);
 }
 
 UInt8 __GBIORegisterNullRead(GBIORegister *reg)

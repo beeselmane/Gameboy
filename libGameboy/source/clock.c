@@ -150,7 +150,7 @@ void __GBClockTimerDebug(GBClock *this, GBProcessor *cpu, GBGraphicsDriver *driv
 
 void GBClockTick(GBClock *this)
 {
-    if (!this->gameboy)
+    if (!this->gameboy || this->gameboy->cpu->state.mode == kGBProcessorModeOff)
         return;
 
     bool timerEnable = !!(this->timerControl->value & kGBTimerEnableFlag);

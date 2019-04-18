@@ -38,6 +38,13 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
     [[self screenView] setup];
 }
 
+- (BOOL) windowShouldClose:(NSWindow *)sender
+{
+    [NSApp terminate:self];
+
+    return NO;
+}
+
 @end
 
 @implementation GBScreenView
@@ -193,6 +200,9 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
         // This line is logically and functionally equivalent to the above.
         ((void (*)(id, SEL))[self methodForSelector:cmd])(self, cmd);
         self->_lastFrameTime = time;
+
+        // Called every frame
+        [[GBAppDelegate instance] updateFrame];
 
         [[self openGLContext] flushBuffer];
         CGLUnlockContext([[self openGLContext] CGLContextObj]);

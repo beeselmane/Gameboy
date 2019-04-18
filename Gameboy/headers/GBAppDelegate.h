@@ -2,13 +2,27 @@
 
 @class GBGameboyInstance;
 @class GBScreenWindow;
+@class GBStateWindow;
 
 @interface GBAppDelegate : NSObject <NSApplicationDelegate>
 
 @property (strong) GBGameboyInstance *gameboy;
+
 @property (strong) GBScreenWindow *screenWindow;
+@property (strong) GBStateWindow *stateWindow;
 
 + (instancetype) instance;
+
+- (void) updateFrame;
+
+- (IBAction) focusScreen:(id)sender;
+- (IBAction) focusState:(id)sender;
+
+- (IBAction) startEmulation:(id)sender;
+- (IBAction) pauseEmulation:(id)sender;
+
+- (IBAction) beginEmulation:(id)sender;
+- (IBAction) openROM:(id)sender;
 
 #if 0
 
@@ -19,7 +33,7 @@
 - (IBAction) run:(id)sender;
 - (IBAction) image:(id)sender;
 - (IBAction) breakProgram:(id)sender;
-- (IBAction)loadMemory:(id)sender;
+- (IBAction) loadMemory:(id)sender;
 
 @property (strong) IBOutlet NSTextField *boxA;
 @property (strong) IBOutlet NSTextField *boxB;
