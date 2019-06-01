@@ -54,7 +54,7 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
 
 - (NSBitmapImageRep *) makeBitmapImageOfWidth:(UInt32)width height:(UInt32) height;
 
-- (NSImage *) decodeTileset:(UInt8 *)source into:(UInt32 [kGBTileCount][kGBTileWidth * kGBTileHeight])result needsImage:(bool)needsImage;
+- (NSBitmapImageRep *) decodeTileset:(UInt8 *)source into:(UInt32 [kGBTileCount][kGBTileWidth * kGBTileHeight])result needsImage:(bool)needsImage;
 - (void) decodeTile:(UInt8 *)tileSource into:(UInt32 [kGBTileWidth * kGBTileHeight])result;
 
 @end
@@ -249,10 +249,11 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
     UInt32 tiles[kGBTileCount][kGBTileWidth * kGBTileHeight];
     UInt8 *tileset = &gameboy->vram->memory[0];
 
-    return [self decodeTileset:tileset into:tiles needsImage:YES];
+    NSBitmapImageRep *bitmap = [self decodeTileset:tileset into:tiles needsImage:YES];
+    return [[NSImage alloc] initWithCGImage:[bitmap CGImage] size:NSMakeSize(128, 192)];
 }
 
-- (NSImage *) generateBitmap:(UInt8)map isHighMap:(bool)isHighMap
+- (NSImage *) generateImage:(UInt8)map isHighMap:(bool)isHighMap
 {
     bool isFirstMap = !map;
 
@@ -302,16 +303,6 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
 
     return [[NSImage alloc] initWithCGImage:[image CGImage] size:NSMakeSize((kGBBackgroundTileCount * kGBTileWidth), (kGBBackgroundTileCount * kGBTileHeight))];
 }
-
-#if 0
-
-    UInt8 control = gameboy->mmio->portMap[0x40]->value;
-    bool highmap = control & 0x10;
-
-    //UInt32 map1data[32 * 32 * 8 * 8];
-    //UInt32 map0data[32 * 32 * 8 * 8];
-
-#endif
 
 #pragma mark - Disassembler Utilities
 

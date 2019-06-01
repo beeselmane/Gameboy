@@ -7,7 +7,7 @@
 // This is just easier, in the end.
 #import "gameboy.h"
 
-#define kGBStateFrameUpdateTrigger 30
+#define kGBStateFrameUpdateTrigger 15
 
 @interface GBStateWindow ()
 
@@ -241,6 +241,8 @@
     [self setHex8:[self textBoxMemoryValue] value:[gameboy read:address]];
     [self setHex16:[self textBoxMemoryAddress] value:address];
 }
+
+#pragma mark - Window Functions
 
 - (void) windowDidLoad
 {

@@ -1,13 +1,19 @@
 #import "GBAppDelegate.h"
 
 #import "GBGameboyInstance.h"
+#import "GBBackgroundWindow.h"
+#import "GBPaletteWindow.h"
 #import "GBStateWindow.h"
 #import "GBScreen.h"
 
 @implementation GBAppDelegate
 
-@synthesize screenWindow = _screenWindow;
 @synthesize gameboy = _gameboy;
+
+@synthesize backgroundWindow = _backgroundWindow;
+@synthesize paletteWindow = _paletteWindow;
+@synthesize stateWindow = _stateWindow;
+@synthesize screenWindow = _screenWindow;
 
 + (instancetype) instance
 {
@@ -16,10 +22,14 @@
 
 - (void) updateFrame
 {
+    if ([[[self backgroundWindow] window] isVisible])
+        [[self backgroundWindow] updateFrame];
+
+    if ([[[self paletteWindow] window] isVisible])
+        [[self paletteWindow] updateFrame];
+
     if ([[[self stateWindow] window] isVisible])
         [[self stateWindow] updateFrame];
-
-    //
 }
 
 - (void) applicationWillFinishLaunching:(NSNotification *)notification
@@ -28,10 +38,14 @@
 
     _screenWindow = [[GBScreenWindow alloc] init];
     _stateWindow = [[GBStateWindow alloc] init];
+    _paletteWindow = [[GBPaletteWindow alloc] init];
+    _backgroundWindow = [[GBBackgroundWindow alloc] init];
 }
 
 - (void) applicationDidFinishLaunching:(NSNotification *)notification
 {
+    [[[self backgroundWindow] window] orderOut:self];
+    [[[self paletteWindow] window] orderOut:self];
     [[[self stateWindow] window] orderOut:self];
 
     [[self screenWindow] showWindow:self];
@@ -63,6 +77,20 @@
     [[self stateWindow] showWindow:sender];
 
     [[self gameboy] setIsRunning:NO];
+}
+
+- (IBAction) focusPalette:(id)sender
+{
+    [[self paletteWindow] showWindow:sender];
+
+    [[[self screenWindow] window] makeKeyAndOrderFront:self];
+}
+
+- (IBAction) focusBackground:(id)sender
+{
+    [[self backgroundWindow] showWindow:sender];
+
+    [[[self screenWindow] window] makeKeyAndOrderFront:self];
 }
 
 - (IBAction) startEmulation:(id)sender

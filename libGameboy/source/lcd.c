@@ -163,9 +163,10 @@ GBLCDControlPort *GBLCDControlPortCreate(GBCoordPort *coordPort)
 
 void __GBLCDControlPortWrite(GBLCDControlPort *this, UInt8 byte)
 {
+    bool wasOff = this->value >> 7;
     this->value = byte;
 
-    if (!(byte >> 7)) {
+    if (!(byte >> 7) && !wasOff) {
         if (this->driver->driverMode != kGBDriverStateVBlank)
         {
             fprintf(stderr, "WARNING: LCD was disabled during a mode other than V-Blank.\n");
@@ -181,9 +182,8 @@ void __GBLCDControlPortWrite(GBLCDControlPort *this, UInt8 byte)
 
         fprintf(stderr, "Note: Turned off display.\n");
 
-        // TODO: Set display to this->driver->nullColor
-        memset(this->driver->screenData, 0x00, kGBScreenWidth * kGBScreenHeight * sizeof(UInt32));
-    } else {
+        memset(this->driver->screenData, this->driver->nullColor, kGBScreenWidth * kGBScreenHeight * sizeof(UInt32));
+    } else if ((byte >> 7) && wasOff) {
         this->driver->driverMode = kGBDriverStateSpriteSearch;
         this->driver->driverModeTicks = 0;
         this->driver->displayOn = true;
@@ -356,7 +356,6 @@ GBGraphicsDriver *GBGraphicsDriverCreate(void)
         driver->driverX = 0;
 
         driver->nullColor = 0x00000000;
-        driver->screenIndex = 0;
 
         driver->tick = __GBGraphicsDriverTick;
         driver->install = __GBGraphicsDriverInstall;
@@ -472,19 +471,96 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                 __GBGraphicsDriverSetMode(this, kGBDriverStatePixelTransfer);
                 this->driverModeTicks = 0;
 
+                // =-=-=-=-=-=-=-=-=-=-=-=-=-=-= //
+                if (this->coordinate->value) {
+                    // Clear the last line
+                    memset(&this->screenData[(this->coordinate->value - 1) * kGBScreenWidth], 0x00, kGBScreenWidth * sizeof(UInt32));
+                } else {
+                    // Clear the bottom line on the display
+                    memset(&this->screenData[(kGBScreenHeight - 1) * kGBScreenWidth], 0x00, kGBScreenWidth * sizeof(UInt32));
+                }
+                // =-=-=-=-=-=-=-=-=-=-=-=-=-=-= //
+
                 return;
             }
         } break;
         case kGBDriverStatePixelTransfer: {
+            // Halp I need render logic....
+
+            // Note: FIFO blocks if remaining pixels <= 8
+
+            // Fetch steps:
+            // 1. Read tile (pointer already into bg map)
+            // 2. Read data byte 0 (from tile offset in step 1)
+            // 3. Read data byte 1
+            //    --> Increase pointer by 1
+            //    --> Push 8 new pixels
+            // 4. Idle (until FIFO has space)
+
+            // Note: Push every clock, only perform above steps every other clock
+            // Note: Discard this->scrollX->value pixels at the start of each line
+
+            // Note: When we reach screen width, we reset the fetcher and the FIFO buffer and continue
+            // Note: When we reach window x position, FIFO is cleared and the offset saved is overwritten by the correct offset for the window start.
+
+            // Note: Format of FIFO/Fetcher is such that each stores the two bits of a given pixel with the palette used (here just paletteBG, etc.)
 
             // TODO: Transfer pixels if we can
-            if (this->screenIndex >= (kGBScreenHeight * kGBScreenWidth))
-                this->screenIndex = 0;
+            //if (this->screenIndex >= (kGBScreenHeight * kGBScreenWidth))
+            //    this->screenIndex = 0;
 
-            this->screenData[this->screenIndex++] += 0x01010100;
-            this->fifoPosition++;
+            //this->screenData[this->screenIndex++] += 0x01010100;
+            //this->fifoPosition++;
 
-            if (this->fifoPosition == kGBScreenWidth)
+            // control & 0x10; highmap
+
+            // FIFO
+            if (true)
+            {
+                // FIFO only runs with over 8 pixels
+                if (this->fifoSize > 8)
+                {
+                    UInt8 nextPixel = this->fifoBuffer[this->fifoPosition++];
+                    UInt8 palette = nextPixel & 0x0F;
+                    UInt8 color = nextPixel >> 8;
+
+                    // We have to figure out the pixel's RGB by looking it up in the palette and the current color map
+                    UInt8 trueColor;
+
+                    switch (palette)
+                    {
+                        case 1:  trueColor = this->paletteSprite0->value >> (2 * color); break;
+                        case 2:  trueColor = this->paletteSprite1->value >> (2 * color); break;
+                        default: trueColor = this->paletteBG->value >> (2 * color);      break;
+                    }
+
+                    trueColor &= 0x3;
+
+                    // Finally lookup based on selected RGB values
+                    UInt32 nextPixelRGB = this->colorLookup[trueColor];
+
+                    // This is the basic output step
+                    this->linePointer[this->linePosition++] = nextPixelRGB;
+                    this->fifoSize--;
+
+                    // And then wrap position when it overflows
+                    if (this->fifoPosition == 16)
+                        this->fifoPosition = 0;
+                }
+            }
+
+            // Fetcher
+            if (this->driverModeTicks & 1)
+            {
+                //
+            }
+
+            // =-=-=-=-=-=-=-=-=-=-= //
+            UInt32 *line = &this->screenData[this->coordinate->value * kGBScreenWidth];
+            line[this->fifoPosition++] = 0x00FF0000;
+            // =-=-=-=-=-=-=-=-=-=-= //
+
+            if (this->linePosition == kGBScreenWidth)
             {
                 __GBGraphicsDriverSetMode(this, kGBDriverStateHBlank);
 
@@ -533,6 +609,8 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
             {
                 __GBGraphicsDriverSetMode(this, kGBDriverStateSpriteSearch);
                 this->coordinate->value = 0;
+
+                this->fetcherOffset = (this->control->value & 0x08) ? 0x9C00 : 0x9800;
             }
 
             __GBGraphicsDriverCheckCoincidence(this);

@@ -2,15 +2,20 @@
 #import "GBAppDelegate.h"
 #import "GBGameboyInstance.h"
 
-#define kGBStateFrameUpdateTrigger 30
+#define kGBPaletteFrameUpdateTrigger 30
 
 @implementation GBPaletteWindow
 
 @synthesize imageView = _imageView;
 
+- (instancetype) init
+{
+    return (self = [self initWithWindowNibName:@"GBPaletteWindow"]);
+}
+
 - (void) updateFrame
 {
-    if (self->framesSinceUpdate++ >= kGBStateFrameUpdateTrigger)
+    if (self->framesSinceUpdate++ >= kGBPaletteFrameUpdateTrigger)
     {
         self->framesSinceUpdate = 0;
 
@@ -31,6 +36,13 @@
     [super windowDidLoad];
 
     [self updateImage];
+}
+
+- (BOOL) windowShouldClose:(NSWindow *)sender
+{
+    [[self window] orderOut:sender];
+
+    return NO;
 }
 
 @end

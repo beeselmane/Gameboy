@@ -1,6 +1,6 @@
 #import <Cocoa/Cocoa.h>
 
-@interface GBBackgroundWindow : NSWindowController
+@interface GBBackgroundWindow : NSWindowController <NSWindowDelegate>
 {
     UInt32 framesSinceUpdate;
 }

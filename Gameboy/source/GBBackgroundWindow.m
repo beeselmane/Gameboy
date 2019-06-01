@@ -9,6 +9,11 @@
 @synthesize imageView0 = _imageView0;
 @synthesize imageView1 = _imageView1;
 
+- (instancetype) init
+{
+    return (self = [self initWithWindowNibName:@"GBBackgroundWindow"]);
+}
+
 - (void) updateImages
 {
     GBGameboyInstance *gameboy = [[GBAppDelegate instance] gameboy];
@@ -34,6 +39,13 @@
     [super windowDidLoad];
 
     [self updateImages];
+}
+
+- (BOOL) windowShouldClose:(NSWindow *)sender
+{
+    [[self window] orderOut:sender];
+
+    return NO;
 }
 
 @end

@@ -29,7 +29,7 @@ struct __GBGameboy;
 
 - (UInt8) read:(UInt16)address;
 
-- (NSImage *) generateBitmap:(UInt8)map isHighMap:(bool)isHighMap;
+- (NSImage *) generateImage:(UInt8)map isHighMap:(bool)isHighMap;
 - (NSImage *) tileset;
 
 - (GBDisassemblyInfo **) disassemble:(UInt8 *)code ofSize:(UInt32)size count:(UInt32 *)count;

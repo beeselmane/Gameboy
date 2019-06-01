@@ -1,6 +1,6 @@
 #import <Cocoa/Cocoa.h>
 
-@interface GBPaletteWindow : NSWindowController
+@interface GBPaletteWindow : NSWindowController <NSWindowDelegate>
 {
     UInt32 framesSinceUpdate;
 }

@@ -203,28 +203,33 @@ typedef struct __GBGraphicsDriver {
     bool displayOn;
 
     UInt32 screenData[kGBScreenHeight * kGBScreenWidth];
-    UInt32 colorLookup[4];
-    UInt32 screenIndex;
-    UInt32 nullColor;
+    UInt32 *linePointer; // Points to the head of the current line while drawing
+    UInt32 linePosition; // Offset into current line to place the next pixel
 
-    UInt8 fifoBuffer[16]; // Pixel palette values + palette number (low byte is palette low, high byte is color index)
-    UInt8 fifoPosition;
-    UInt8 fifoSize;
+    UInt32 colorLookup[4]; // Map of 'white, light, dark, black' to real RGB values.
+    UInt8 nullColor; // The screen buffer is flushed with this value when it is disabled.
 
-    UInt8 fetcherTile;
-    UInt8 fetcherByte0;
-    UInt8 fetcherByte1;
-    UInt16 fetcherOffset;
-    UInt8 fetcherPosition;
-    UInt8 fetcherMode;
+    UInt8 fifoBuffer[16]; // Pixel palette values + palette number (low byte is palette, high byte is color index)
+    UInt8 fifoPosition; // The next position to draw from when pulling pixel info. Wraps from 15 back to 0.
+    UInt8 fifoSize; // The number of pixels left in the FIFO buffer.
+    // Note: The state of the FIFO is modulated by monitoring the value of fifoSize above.
+
+    UInt8 fetcherTile; // The index into the tileset of the last fetched tile
+    UInt8 fetcherByte0; // The first byte of the last fetched tile
+    UInt8 fetcherByte1; // The second byte of the last fetched tile
+    UInt16 fetcherPosition; // The location of the background/window map currently being read from.
+    UInt8 fetcherOffset; // The offset into the background/window map currently being read.
+    UInt8 fetcherMode; // The state of memory access for the fetcher.
 
     // We can only draw 10 sprites per line.
-    UInt8 lineSprites[10];
-    UInt8 lineSpriteCount;
-    UInt8 spriteIndex;
+    UInt8 lineSprites[10]; // Index of the sprites to be drawn in the next line
+    UInt8 lineSpriteCount; // Number of spites in the next line
+    UInt8 spriteIndex; // Iterator for the sprite table in RAM
 
-    UInt16 driverModeTicks;
-    UInt8 driverMode;
+    UInt16 driverModeTicks; // Ticks in the current mode
+    UInt8 driverMode; // The current driver mode
+
+    // ??? Something used in the sprite routine. I'm not sure what it does...
     UInt8 driverX;
 } GBGraphicsDriver;
 

@@ -35,10 +35,14 @@
 		8B976277220CB09A0059F606 /* drm.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B976275220CB09A0059F606 /* drm.gb */; };
 		8BA00B232203F584009CE00B /* ic.c in Sources */ = {isa = PBXBuildFile; fileRef = 8BA00B222203F584009CE00B /* ic.c */; };
 		8BB4DBEB22602A9400008FD6 /* GBGameboyInstance.m in Sources */ = {isa = PBXBuildFile; fileRef = 8BB4DBEA22602A9400008FD6 /* GBGameboyInstance.m */; };
-		8BB4DBF222602B4E00008FD6 /* GBStateWindow.xib in Resources */ = {isa = PBXBuildFile; fileRef = 8BB4DBEF22602B4E00008FD6 /* GBStateWindow.xib */; };
 		8BB4DBF322602B4E00008FD6 /* GBStateWindow.m in Sources */ = {isa = PBXBuildFile; fileRef = 8BB4DBF122602B4E00008FD6 /* GBStateWindow.m */; };
-		8BB4DC0122602C2500008FD6 /* GBScreen.xib in Resources */ = {isa = PBXBuildFile; fileRef = 8BB4DBFE22602C2500008FD6 /* GBScreen.xib */; };
 		8BB4DC0222602C2500008FD6 /* GBScreen.m in Sources */ = {isa = PBXBuildFile; fileRef = 8BB4DC0022602C2500008FD6 /* GBScreen.m */; };
+		8BDE5B11226858BA005535B8 /* GBPaletteWindow.m in Sources */ = {isa = PBXBuildFile; fileRef = 8BDE5B0F226858BA005535B8 /* GBPaletteWindow.m */; };
+		8BDE5B16226858C6005535B8 /* GBBackgroundWindow.m in Sources */ = {isa = PBXBuildFile; fileRef = 8BDE5B14226858C6005535B8 /* GBBackgroundWindow.m */; };
+		8BDE5B1722685AB3005535B8 /* GBStateWindow.xib in Resources */ = {isa = PBXBuildFile; fileRef = 8BDE5B1922685AB3005535B8 /* GBStateWindow.xib */; };
+		8BDE5B1A22685AC5005535B8 /* GBScreen.xib in Resources */ = {isa = PBXBuildFile; fileRef = 8BDE5B1C22685AC5005535B8 /* GBScreen.xib */; };
+		8BDE5B1D22685ACB005535B8 /* GBPaletteWindow.xib in Resources */ = {isa = PBXBuildFile; fileRef = 8BDE5B1F22685ACB005535B8 /* GBPaletteWindow.xib */; };
+		8BDE5B2022685ACE005535B8 /* GBBackgroundWindow.xib in Resources */ = {isa = PBXBuildFile; fileRef = 8BDE5B2222685ACE005535B8 /* GBBackgroundWindow.xib */; };
 		8BEDFBA8220C8C7D00F3F598 /* gamepad.c in Sources */ = {isa = PBXBuildFile; fileRef = 8BEDFBA6220C876900F3F598 /* gamepad.c */; };
 		8BF79B9522058DD5003CAB0D /* bios.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FB21F5690600FA2526 /* bios.c */; };
 		8BF79B9622058DD5003CAB0D /* mmio.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B3E99FD21F5701D00FA2526 /* mmio.c */; };
@@ -117,12 +121,18 @@
 		8BA00B222203F584009CE00B /* ic.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = ic.c; sourceTree = "<group>"; };
 		8BB4DBE922602A9400008FD6 /* GBGameboyInstance.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBGameboyInstance.h; sourceTree = "<group>"; };
 		8BB4DBEA22602A9400008FD6 /* GBGameboyInstance.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBGameboyInstance.m; sourceTree = "<group>"; };
-		8BB4DBEF22602B4E00008FD6 /* GBStateWindow.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = GBStateWindow.xib; sourceTree = "<group>"; };
 		8BB4DBF022602B4E00008FD6 /* GBStateWindow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBStateWindow.h; sourceTree = "<group>"; };
 		8BB4DBF122602B4E00008FD6 /* GBStateWindow.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBStateWindow.m; sourceTree = "<group>"; };
-		8BB4DBFE22602C2500008FD6 /* GBScreen.xib */ = {isa = PBXFileReference; lastKnownFileType = file.xib; path = GBScreen.xib; sourceTree = "<group>"; };
 		8BB4DBFF22602C2500008FD6 /* GBScreen.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBScreen.h; sourceTree = "<group>"; };
 		8BB4DC0022602C2500008FD6 /* GBScreen.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBScreen.m; sourceTree = "<group>"; };
+		8BDE5B0E226858BA005535B8 /* GBPaletteWindow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBPaletteWindow.h; sourceTree = "<group>"; };
+		8BDE5B0F226858BA005535B8 /* GBPaletteWindow.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBPaletteWindow.m; sourceTree = "<group>"; };
+		8BDE5B13226858C6005535B8 /* GBBackgroundWindow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GBBackgroundWindow.h; sourceTree = "<group>"; };
+		8BDE5B14226858C6005535B8 /* GBBackgroundWindow.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = GBBackgroundWindow.m; sourceTree = "<group>"; };
+		8BDE5B1822685AB3005535B8 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/GBStateWindow.xib; sourceTree = "<group>"; };
+		8BDE5B1B22685AC5005535B8 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/GBScreen.xib; sourceTree = "<group>"; };
+		8BDE5B1E22685ACB005535B8 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/GBPaletteWindow.xib; sourceTree = "<group>"; };
+		8BDE5B2122685ACE005535B8 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/GBBackgroundWindow.xib; sourceTree = "<group>"; };
 		8BEDFBA6220C876900F3F598 /* gamepad.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = gamepad.c; sourceTree = "<group>"; };
 		8BF79B9322058A55003CAB0D /* clock.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = clock.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -171,10 +181,8 @@
 			children = (
 				8B44BACD22141881001D4318 /* headers */,
 				8B44BAD122141881001D4318 /* source */,
+				8BDE5B2422685CB7005535B8 /* interface */,
 				8B3E99C721F26BE700FA2526 /* Assets.xcassets */,
-				8B3E99C921F26BE800FA2526 /* MainMenu.xib */,
-				8BB4DBEF22602B4E00008FD6 /* GBStateWindow.xib */,
-				8BB4DBFE22602C2500008FD6 /* GBScreen.xib */,
 				8B3E99CC21F26BE800FA2526 /* Info.plist */,
 				8B3E99CF21F26BE800FA2526 /* Gameboy.entitlements */,
 				8B3E99EC21F5343500FA2526 /* main.s */,
@@ -247,8 +255,10 @@
 			isa = PBXGroup;
 			children = (
 				8B44BACE22141881001D4318 /* GBAppDelegate.h */,
+				8BDE5B13226858C6005535B8 /* GBBackgroundWindow.h */,
 				8BB4DBE922602A9400008FD6 /* GBGameboyInstance.h */,
 				8B44BACF22141881001D4318 /* GBImageView.h */,
+				8BDE5B0E226858BA005535B8 /* GBPaletteWindow.h */,
 				8BB4DBFF22602C2500008FD6 /* GBScreen.h */,
 				8BB4DBF022602B4E00008FD6 /* GBStateWindow.h */,
 			);
@@ -259,8 +269,10 @@
 			isa = PBXGroup;
 			children = (
 				8B44BAD322141881001D4318 /* GBAppDelegate.m */,
+				8BDE5B14226858C6005535B8 /* GBBackgroundWindow.m */,
 				8BB4DBEA22602A9400008FD6 /* GBGameboyInstance.m */,
 				8B44BAD422141881001D4318 /* GBImageView.m */,
+				8BDE5B0F226858BA005535B8 /* GBPaletteWindow.m */,
 				8BB4DC0022602C2500008FD6 /* GBScreen.m */,
 				8BB4DBF122602B4E00008FD6 /* GBStateWindow.m */,
 			);
@@ -286,6 +298,18 @@
 				8B976275220CB09A0059F606 /* drm.gb */,
 			);
 			path = games;
+			sourceTree = "<group>";
+		};
+		8BDE5B2422685CB7005535B8 /* interface */ = {
+			isa = PBXGroup;
+			children = (
+				8B3E99C921F26BE800FA2526 /* MainMenu.xib */,
+				8BDE5B2222685ACE005535B8 /* GBBackgroundWindow.xib */,
+				8BDE5B1F22685ACB005535B8 /* GBPaletteWindow.xib */,
+				8BDE5B1922685AB3005535B8 /* GBStateWindow.xib */,
+				8BDE5B1C22685AC5005535B8 /* GBScreen.xib */,
+			);
+			name = interface;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -381,8 +405,10 @@
 				8B976277220CB09A0059F606 /* drm.gb in Resources */,
 				8B4C28D622064014005FE36A /* tetris.gb in Resources */,
 				8B3E99C821F26BE700FA2526 /* Assets.xcassets in Resources */,
-				8BB4DC0122602C2500008FD6 /* GBScreen.xib in Resources */,
+				8BDE5B1D22685ACB005535B8 /* GBPaletteWindow.xib in Resources */,
+				8BDE5B1A22685AC5005535B8 /* GBScreen.xib in Resources */,
 				8B3E99CB21F26BE800FA2526 /* MainMenu.xib in Resources */,
+				8BDE5B2022685ACE005535B8 /* GBBackgroundWindow.xib in Resources */,
 				8B6C5C0E222680C800CABFBB /* GBFragment.glsl in Resources */,
 				8B86B8A7220CB3C60097AF73 /* 02-interrupts.gb in Resources */,
 				8B86B8A8220CB3C60097AF73 /* 04-op r,imm.gb in Resources */,
@@ -394,7 +420,7 @@
 				8B6C5C10222680D200CABFBB /* GBVertex.glsl in Resources */,
 				8B86B8B3220CBA280097AF73 /* opus5.gb in Resources */,
 				8B86B8AE220CB3C60097AF73 /* 05-op rp.gb in Resources */,
-				8BB4DBF222602B4E00008FD6 /* GBStateWindow.xib in Resources */,
+				8BDE5B1722685AB3005535B8 /* GBStateWindow.xib in Resources */,
 				8B86B8AF220CB3C60097AF73 /* 06-ld r,r.gb in Resources */,
 				8B86B8B0220CB3C60097AF73 /* 09-op r,r.gb in Resources */,
 				8B86B8B1220CB3C60097AF73 /* 10-bit ops.gb in Resources */,
@@ -408,11 +434,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8BDE5B16226858C6005535B8 /* GBBackgroundWindow.m in Sources */,
 				8B208A9022673F9300D1944B /* GBImageView.m in Sources */,
 				8BB4DC0222602C2500008FD6 /* GBScreen.m in Sources */,
 				8BB4DBEB22602A9400008FD6 /* GBGameboyInstance.m in Sources */,
 				8BB4DBF322602B4E00008FD6 /* GBStateWindow.m in Sources */,
 				8B44BAD622141881001D4318 /* GBAppDelegate.m in Sources */,
+				8BDE5B11226858BA005535B8 /* GBPaletteWindow.m in Sources */,
 				8B3E99ED21F5343500FA2526 /* main.s in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -454,6 +482,38 @@
 				8B3E99CA21F26BE800FA2526 /* Base */,
 			);
 			name = MainMenu.xib;
+			sourceTree = "<group>";
+		};
+		8BDE5B1922685AB3005535B8 /* GBStateWindow.xib */ = {
+			isa = PBXVariantGroup;
+			children = (
+				8BDE5B1822685AB3005535B8 /* Base */,
+			);
+			name = GBStateWindow.xib;
+			sourceTree = "<group>";
+		};
+		8BDE5B1C22685AC5005535B8 /* GBScreen.xib */ = {
+			isa = PBXVariantGroup;
+			children = (
+				8BDE5B1B22685AC5005535B8 /* Base */,
+			);
+			name = GBScreen.xib;
+			sourceTree = "<group>";
+		};
+		8BDE5B1F22685ACB005535B8 /* GBPaletteWindow.xib */ = {
+			isa = PBXVariantGroup;
+			children = (
+				8BDE5B1E22685ACB005535B8 /* Base */,
+			);
+			name = GBPaletteWindow.xib;
+			sourceTree = "<group>";
+		};
+		8BDE5B2222685ACE005535B8 /* GBBackgroundWindow.xib */ = {
+			isa = PBXVariantGroup;
+			children = (
+				8BDE5B2122685ACE005535B8 /* Base */,
+			);
+			name = GBBackgroundWindow.xib;
 			sourceTree = "<group>";
 		};
 /* End PBXVariantGroup section */
