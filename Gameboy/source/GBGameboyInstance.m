@@ -1,5 +1,7 @@
-#import "GBGameboyInstance.h"
 #import "gameboy.h"
+
+// This is included after gameboy.h to avoiding the gamepad enum
+#import "GBGameboyInstance.h"
 #import "disasm.h"
 
 #define kGBTileCount            384
@@ -170,9 +172,19 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
     GBGameboyPowerOn(self->gameboy);
 }
 
+- (void) pressKey:(UInt8)key
+{
+    GBGamepadSetKeyState(self->gameboy->gamepad, key, true);
+}
+
+- (void) liftKey:(UInt8)key
+{
+    GBGamepadSetKeyState(self->gameboy->gamepad, key, false);
+}
+
 - (UInt8) read:(UInt16)address
 {
-    return __GBMemoryManagerRead(gameboy->cpu->mmu, address);
+    return __GBMemoryManagerRead(self->gameboy->cpu->mmu, address);
 }
 
 #pragma mark - Background/Palette Image Routines
@@ -245,7 +257,7 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
 - (NSImage *) tileset
 {
     UInt32 tiles[kGBTileCount][kGBTileWidth * kGBTileHeight];
-    UInt8 *tileset = &gameboy->vram->memory[0];
+    UInt8 *tileset = &self->gameboy->vram->memory[0];
 
     NSBitmapImageRep *bitmap = [self decodeTileset:tileset into:tiles needsImage:YES];
     return [[NSImage alloc] initWithCGImage:[bitmap CGImage] size:NSMakeSize(128, 192)];
@@ -255,8 +267,8 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
 {
     bool isFirstMap = !map;
 
-    UInt8 *sourceData = &gameboy->vram->memory[isFirstMap ? kGBBackground0Offset : kGBBackground1Offset];
-    UInt8 *tileset = &gameboy->vram->memory[0];
+    UInt8 *sourceData = &self->gameboy->vram->memory[isFirstMap ? kGBBackground0Offset : kGBBackground1Offset];
+    UInt8 *tileset = &self->gameboy->vram->memory[0];
 
     UInt32 tiles[kGBTileCount][kGBTileWidth * kGBTileHeight];
     [self decodeTileset:tileset into:tiles needsImage:NO];
@@ -354,8 +366,8 @@ static void __GBIOWrite(GBIORegister *this, UInt8 byte)
     dbg_ff02->read = __GBIORegisterSimpleRead;
     dbg_ff02->write = __GBIOWrite;
 
-    GBIOMapperInstallPort(gameboy->mmio, dbg_ff02);
-    GBIOMapperInstallPort(gameboy->mmio, dbg_ff01);
+    GBIOMapperInstallPort(self->gameboy->mmio, dbg_ff02);
+    GBIOMapperInstallPort(self->gameboy->mmio, dbg_ff01);
 }
 
 - (void) dumpBootROM

@@ -1,11 +1,13 @@
 #import "GBStateWindow.h"
-#import "GBGameboyInstance.h"
 #import "GBAppDelegate.h"
 
 // This is the only Objective-C class except GBGameboyInstance which references internal state directly
 // This is simply a result of the amount of the overhead that would be required to go through the Obj-C object.
 // This is just easier, in the end.
 #import "gameboy.h"
+
+// This has to be included after gameboy.h to avoid redefining an enum
+#import "GBGameboyInstance.h"
 
 #define kGBStateFrameUpdateTrigger 15
 

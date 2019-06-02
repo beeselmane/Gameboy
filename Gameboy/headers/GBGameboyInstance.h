@@ -3,6 +3,19 @@
 
 struct __GBGameboy;
 
+#ifndef __gameboy_gamepad__
+    enum {
+        kGBGamepadDown   = 0x3,
+        kGBGamepadUp     = 0x2,
+        kGBGamepadLeft   = 0x1,
+        kGBGamepadRight  = 0x0,
+        kGBGamepadStart  = 0x7,
+        kGBGamepadSelect = 0x6,
+        kGBGamepadA      = 0x5,
+        kGBGamepadB      = 0x4
+    };
+#endif /* !defined(__gameboy_gamepad__) */
+
 @interface GBGameboyInstance : NSObject
 {
     @public
@@ -26,6 +39,9 @@ struct __GBGameboy;
 - (void) tick:(NSUInteger)times;
 - (void) singleTick;
 - (void) powerOn;
+
+- (void) pressKey:(UInt8)key;
+- (void) liftKey:(UInt8)key;
 
 - (UInt8) read:(UInt16)address;
 
