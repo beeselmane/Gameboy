@@ -163,7 +163,7 @@ GBLCDControlPort *GBLCDControlPortCreate(GBCoordPort *coordPort)
 
 void __GBLCDControlPortWrite(GBLCDControlPort *this, UInt8 byte)
 {
-    bool wasOff = this->value >> 7;
+    bool wasOff = !(this->value >> 7);
     this->value = byte;
 
     if (!(byte >> 7) && !wasOff) {
@@ -350,10 +350,28 @@ GBGraphicsDriver *GBGraphicsDriverCreate(void)
         driver->driverMode = kGBDriverStateVBlank;
         driver->driverModeTicks = 0;
 
-        driver->lineSpriteCount = 0;
+        driver->linePointer = driver->screenData;
+        driver->linePosition = 0;
+
         driver->fifoPosition = 0;
+        driver->fifoSize = 0;
+
+        driver->drawingWindow = false;
+
+        driver->fetcherPosition = 0x1C00;
+        driver->fetcherOffset = 0;
+        driver->fetcherMode = kGBFetcherStateFetchTile;
+
+        driver->lineSpriteCount = 0;
         driver->spriteIndex = 0;
+
+        driver->lineMod8 = 0;
         driver->driverX = 0;
+
+        driver->colorLookup[0] = 0xBBBBBB; // white
+        driver->colorLookup[1] = 0xEEEEEE; // light gray
+        driver->colorLookup[2] = 0x555555; // dark gray
+        driver->colorLookup[3] = 0x000000; // black
 
         driver->nullColor = 0x00000000;
 
@@ -471,34 +489,17 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                 __GBGraphicsDriverSetMode(this, kGBDriverStatePixelTransfer);
                 this->driverModeTicks = 0;
 
-                // =-=-=-=-=-=-=-=-=-=-=-=-=-=-= //
-                if (this->coordinate->value) {
-                    // Clear the last line
-                    memset(&this->screenData[(this->coordinate->value - 1) * kGBScreenWidth], 0x00, kGBScreenWidth * sizeof(UInt32));
-                } else {
-                    // Clear the bottom line on the display
-                    memset(&this->screenData[(kGBScreenHeight - 1) * kGBScreenWidth], 0x00, kGBScreenWidth * sizeof(UInt32));
-                }
-                // =-=-=-=-=-=-=-=-=-=-=-=-=-=-= //
-
                 return;
             }
         } break;
         case kGBDriverStatePixelTransfer: {
-            // Halp I need render logic....
-
-            // Note: FIFO blocks if remaining pixels <= 8
-
             // Fetch steps:
             // 1. Read tile (pointer already into bg map)
             // 2. Read data byte 0 (from tile offset in step 1)
             // 3. Read data byte 1
-            //    --> Increase pointer by 1
+            //    --> Increase offset by 1
             //    --> Push 8 new pixels
             // 4. Idle (until FIFO has space)
-
-            // Note: Push every clock, only perform above steps every other clock
-            // Note: Discard this->scrollX->value pixels at the start of each line
 
             // Note: When we reach screen width, we reset the fetcher and the FIFO buffer and continue
             // Note: When we reach window x position, FIFO is cleared and the offset saved is overwritten by the correct offset for the window start.
@@ -514,6 +515,7 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
 
             // control & 0x10; highmap
 
+#if 0
             // FIFO
             if (true)
             {
@@ -539,33 +541,116 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                     // Finally lookup based on selected RGB values
                     UInt32 nextPixelRGB = this->colorLookup[trueColor];
 
-                    // This is the basic output step
-                    this->linePointer[this->linePosition++] = nextPixelRGB;
+                    //printf("Calculated RGB 0x%06X for pixel %d%d with mapped value %d%d\n", nextPixelRGB, color >> 1, color & 1, trueColor >> 1, trueColor & 1);
+                    // Output only if we've discarded enough pixels to get to the starting x position
+                    if (!(this->driverX < this->scrollX->value))
+                        this->linePointer[this->linePosition++] = nextPixelRGB;
+
                     this->fifoSize--;
+                    this->driverX++;
 
                     // And then wrap position when it overflows
                     if (this->fifoPosition == 16)
                         this->fifoPosition = 0;
+
+                    // We clear FIFO and change to the window when we reach its x position
+                    if (!this->drawingWindow && this->control->value & 0x20) // Check if window enabled
+                    {
+                        if (this->coordinate->value >= this->windowY->value && this->driverX >= this->windowX->value)
+                        {
+                            // 'clear' the FIFO buffer
+                            this->fifoPosition = 0;
+                            this->fifoSize = 0;
+
+                            // Set fetcher offset to the start of the window (on the given row)
+                            UInt16 windowMapOffset = (this->control->value & 0x40) ? 0x1C00 : 0x1800;
+                            UInt8 currentWindowRow = this->coordinate->value - this->windowY->value;
+
+                            this->fetcherOffset = windowMapOffset + (currentWindowRow * 32);
+                            this->drawingWindow = true;
+                        }
+                    }
                 }
             }
 
             // Fetcher
             if (this->driverModeTicks & 1)
             {
-                //
-            }
+                // We don't need complex memory checking rules here.
+                // In a real gameboy, the video memory is hooked up directly to the screen driver
+                // So there isn't really any possibility for this to fail unless the hardware itself fails.
+                switch (this->fetcherMode)
+                {
+                    case kGBFetcherStateFetchTile: {
+                        this->fetcherTile = this->vram->memory[this->fetcherPosition + this->fetcherOffset++];
 
+                        if (this->fetcherTile != 0x00)
+                        printf("Fetcher: Tile 0x%02X read for position 0x%04X [based at 0x%04X]\n", this->fetcherTile, this->fetcherOffset - 1, this->fetcherPosition);
+
+                        for (UInt8 i = 0; i < 8; i++)
+                            this->fetchBuffer[i] = 0 /* palette index */;
+
+                        this->fetcherMode = kGBFetcherStateFetchByte0;
+                    } break;
+                    case kGBFetcherStateFetchByte0: {
+                        UInt16 tileset = (this->control->value & 0x10) ? 0x0000 : 0x0800;
+                        UInt8 address = tileset + (16 * this->fetcherTile) + (2 * this->lineMod8) + 0;
+
+                        this->fetcherByte0 = this->vram->memory[address];
+
+                        // Push back first byte of each pixel (into top nibble)
+                        for (UInt8 i = 0; i < 8; i++)
+                            this->fetchBuffer[i] = ((this->fetcherByte0 >> i) & 1) << 4;
+
+                        this->fetcherMode = kGBFetcherStateFetchByte1;
+                    } break;
+                    case kGBFetcherStateFetchByte1: {
+                        UInt16 tileset = (this->control->value & 0x10) ? 0x0000 : 0x0800;
+                        UInt8 address = tileset + (16 * this->fetcherTile) + (2 * this->lineMod8) + 1;
+
+                        this->fetcherByte1 = this->vram->memory[address];
+
+                        // Push back second byte of each pixel (into top nibble)
+                        for (UInt8 i = 0; i < 8; i++)
+                            this->fetchBuffer[i] = ((this->fetcherByte1 >> i) & 1) << 5;
+
+                        // The fetcher wraps over x
+                        if (this->fetcherOffset >= 32)
+                            this->fetcherOffset = 0;
+
+                        this->fetcherMode = kGBFetcherStateStall;
+                    } break;
+                    case kGBFetcherStateStall: {
+                        if (this->fifoSize <= 8)
+                        {
+                            // Buffer is already prepared. Simply place it in the FIFO buffer.
+                            if (this->fifoSize == 0) {
+                                // Special case. Normally we don't want to overwrite the data in the buffer, but here the FIFO was just cleared or we're at the start of a line.
+                                memcpy(this->fifoBuffer, this->fetchBuffer, 8);
+                            } else {
+                                // Copy to wherever we have 8 spaces.
+                                UInt8 copyOffset = (this->fifoPosition < 8) ? 8 : 0;
+
+                                memcpy(this->fifoBuffer + copyOffset, this->fetchBuffer, 8);
+                            }
+
+                            this->fifoSize += 8;
+                            this->fetcherMode = kGBFetcherStateFetchTile;
+                        }
+                    } break;
+                }
+            }
+#endif
+
+            //  this->linePosition++;
             // =-=-=-=-=-=-=-=-=-=-= //
             UInt32 *line = &this->screenData[this->coordinate->value * kGBScreenWidth];
             line[this->fifoPosition++] = 0x00FF0000;
             // =-=-=-=-=-=-=-=-=-=-= //
 
-            if (this->linePosition == kGBScreenWidth)
+            if (this->fifoPosition == kGBScreenWidth)
             {
                 __GBGraphicsDriverSetMode(this, kGBDriverStateHBlank);
-
-                this->fifoPosition = 0;
-                this->fifoSize = 0;
 
                 return;
             }
@@ -576,7 +661,6 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
             if (this->driverModeTicks == kGBDriverHorizonalClocks)
             {
                 this->coordinate->value++;
-                this->fifoPosition = 0;
 
                 __GBGraphicsDriverCheckCoincidence(this);
 
@@ -586,12 +670,35 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                     __GBGraphicsDriverSetMode(this, kGBDriverStateSpriteSearch);
                 }
 
-                this->fetcherMode = kGBFetcherStateFetchTile;
-                // TODO: Fetcher initial state
+                this->linePointer += kGBScreenWidth;
+                this->linePosition = 0;
 
-                this->driverModeTicks = 0;
+                this->fifoPosition = 0;
+                this->fifoSize = 0;
+
+                this->drawingWindow = false;
+
+                this->fetcherMode = kGBFetcherStateFetchTile;
+                this->fetcherOffset = 0;
+
                 this->lineSpriteCount = 0;
                 this->spriteIndex = 0;
+
+                this->lineMod8++;
+                this->lineMod8 %= 8;
+
+                this->driverX = 0;
+
+                this->fetcherPosition = (this->control->value & 0x08) ? 0x1C00 : 0x1800;
+
+                // This is how many rows we are off of the origin of the background map.
+                UInt16 fetcherAdjust = (this->coordinate->value + this->scrollY->value);
+
+                // Wrap around the bottom axis
+                if (fetcherAdjust >= kGBFullHeight)
+                    fetcherAdjust %= kGBFullHeight;
+
+                this->fetcherPosition += ((fetcherAdjust % 8) * 32);
 
                 return;
             }
@@ -608,9 +715,14 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
             if (this->coordinate->value > kGBCoordinateMaxY)
             {
                 __GBGraphicsDriverSetMode(this, kGBDriverStateSpriteSearch);
+
+                this->fetcherPosition = (this->control->value & 0x08) ? 0x1C00 : 0x1800;
+                this->linePointer = this->screenData;
+
+                this->lineMod8 = this->scrollY->value % 8;
                 this->coordinate->value = 0;
 
-                this->fetcherOffset = (this->control->value & 0x08) ? 0x9C00 : 0x9800;
+                this->fetcherPosition += (this->scrollY->value * 32);
             }
 
             __GBGraphicsDriverCheckCoincidence(this);

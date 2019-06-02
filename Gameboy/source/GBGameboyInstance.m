@@ -215,7 +215,7 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
      NSBitmapImageRep *image = [self makeBitmapImageOfWidth:128 height:192];
 
      for (UInt16 i = 0; i < kGBTileCount; i++)
-     {
+     {  
          [self decodeTile:&source[i * (2 * kGBTileHeight)] into:result[i]];
 
          if (needsImage)

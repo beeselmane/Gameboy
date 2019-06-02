@@ -78,8 +78,8 @@ bool __GBSpriteRAMOnInstall(GBSpriteRAM *this, struct __GBGameboy *gameboy);
 
 #define kGBLCDControlPortAddress        0xFF40
 #define kGBLCDStatusPortAddress         0xFF41
-#define kGBScrollPortXAddress           0xFF42
-#define kGBScrollPortYAddress           0xFF43
+#define kGBScrollPortYAddress           0xFF42
+#define kGBScrollPortXAddress           0xFF43
 #define kGBCoordPortAddress             0xFF44
 #define kGBLineComparePortAddress       0xFF45
 #define kGBLineWindowPortXAddress       0xFF4A
@@ -213,7 +213,9 @@ typedef struct __GBGraphicsDriver {
     UInt8 fifoPosition; // The next position to draw from when pulling pixel info. Wraps from 15 back to 0.
     UInt8 fifoSize; // The number of pixels left in the FIFO buffer.
     // Note: The state of the FIFO is modulated by monitoring the value of fifoSize above.
+    bool drawingWindow; // This is enabled after switching to window to prevent locking up
 
+    UInt8 fetchBuffer[8]; // Stores the next 8 pixels to be pushed into FIFO
     UInt8 fetcherTile; // The index into the tileset of the last fetched tile
     UInt8 fetcherByte0; // The first byte of the last fetched tile
     UInt8 fetcherByte1; // The second byte of the last fetched tile
@@ -229,8 +231,8 @@ typedef struct __GBGraphicsDriver {
     UInt16 driverModeTicks; // Ticks in the current mode
     UInt8 driverMode; // The current driver mode
 
-    // ??? Something used in the sprite routine. I'm not sure what it does...
-    UInt8 driverX;
+    UInt8 lineMod8; // Tracks the current line number mod 8. This is used to fetch the right lines of tiles.
+    UInt8 driverX; // Track effective position for scrollX and windowX
 } GBGraphicsDriver;
 
 GBGraphicsDriver *GBGraphicsDriverCreate(void);
