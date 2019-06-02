@@ -568,6 +568,9 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                     // Finally lookup based on selected RGB values
                     UInt32 nextPixelRGB = this->colorLookup[trueColor];
 
+                    /*if (!(this->linePosition % 8) || !(this->coordinate->value % 8))
+                        nextPixelRGB = 0xFF0000FF;*/
+
                     /*if (trueColor != 0)
                         printf("Calculated RGB 0x%06X for pixel %d%d with mapped value %d%d\n", nextPixelRGB, color >> 1, color & 1, trueColor >> 1, trueColor & 1);*/
 
@@ -616,7 +619,7 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                         this->fetcherTile = this->vram->memory[this->fetcherBase + this->fetcherPosition + this->fetcherOffset++];
 
                         /*if (this->fetcherTile)
-                            printf("Fetcher: Tile 0x%02X read for position 0x%04X [based at 0x%04X]\n", this->fetcherTile, this->fetcherOffset - 1, this->fetcherPosition);*/
+                            printf("Fetcher: Tile 0x%02X read for position 0x%04X at offset 0x%04X [base: 0x%04X]\n", this->fetcherTile, this->fetcherPosition, this->fetcherOffset - 1, this->fetcherBase);*/
 
                         for (UInt8 i = 0; i < 8; i++)
                             this->fetchBuffer[i] = 0 /* palette index */;
@@ -625,7 +628,7 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                     } break;
                     case kGBFetcherStateFetchByte0: {
                         UInt16 tileset = (this->control->value & 0x10) ? 0x0000 : 0x0800;
-                        UInt8 address = tileset + (16 * this->fetcherTile) + (2 * this->lineMod8) + 0;
+                        UInt16 address = tileset + ((2 * kGBTileHeight) * this->fetcherTile) + (2 * this->lineMod8) + 0;
 
                         this->fetcherByte0 = this->vram->memory[address];
 
@@ -634,20 +637,20 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
 
                         // Push back first byte of each pixel (into top nibble)
                         for (UInt8 i = 0; i < 8; i++)
-                            this->fetchBuffer[i] |= ((this->fetcherByte0 >> i) & 1) << 4;
+                            this->fetchBuffer[i] |= ((this->fetcherByte0 >> (7 - i)) & 1) << 4;
 
                         this->fetcherMode = kGBFetcherStateFetchByte1;
                     } break;
                     case kGBFetcherStateFetchByte1: {
                         UInt16 tileset = (this->control->value & 0x10) ? 0x0000 : 0x0800;
-                        UInt8 address = tileset + (16 * this->fetcherTile) + (2 * this->lineMod8) + 1;
+                        UInt16 address = tileset + ((2 * kGBTileHeight) * this->fetcherTile) + (2 * this->lineMod8) + 1;
 
                         this->fetcherByte1 = this->vram->memory[address];
 
                         // Push back second byte of each pixel (into top nibble)
                         for (UInt8 i = 0; i < 8; i++)
                         {
-                            this->fetchBuffer[i] |= ((this->fetcherByte1 >> i) & 1) << 5;
+                            this->fetchBuffer[i] |= ((this->fetcherByte1 >> (7 - i)) & 1) << 5;
 
                             /*if (this->fetcherTile)
                                 printf("Tile 0x%02X row 0x%02X pixel %d decoded with value %d\n", this->fetcherTile, this->lineMod8, i, (this->fetchBuffer[i] >> 4));*/
