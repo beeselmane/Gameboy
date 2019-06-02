@@ -3,8 +3,6 @@
 #import "disasm.h"
 
 #define kGBTileCount            384
-#define kGBTileHeight           8
-#define kGBTileWidth            8
 
 #define kGBTilesetOffset        0
 #define kGBBackground0Offset    0x1C00

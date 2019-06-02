@@ -8,6 +8,10 @@
     #include <Security/Security.h>
 #endif /* defined(__APPLE__) */
 
+void __GBGraphicsDriverVBlankReset(GBGraphicsDriver *this);
+void __GBGraphicsDriverSetMode(GBGraphicsDriver *this, UInt8 mode);
+void __GBGraphicsDriverCheckCoincidence(GBGraphicsDriver *this);
+
 #pragma mark - Video RAM
 
 GBVideoRAM *GBVideoRAMCreate(void)
@@ -183,6 +187,8 @@ void __GBLCDControlPortWrite(GBLCDControlPort *this, UInt8 byte)
         fprintf(stderr, "Note: Turned off display.\n");
 
         memset(this->driver->screenData, this->driver->nullColor, kGBScreenWidth * kGBScreenHeight * sizeof(UInt32));
+
+        __GBGraphicsDriverVBlankReset(this->driver);
     } else if ((byte >> 7) && wasOff) {
         this->driver->driverMode = kGBDriverStateSpriteSearch;
         this->driver->driverModeTicks = 0;
@@ -192,6 +198,8 @@ void __GBLCDControlPortWrite(GBLCDControlPort *this, UInt8 byte)
 
         // TODO: Set display to lookup index 0
         memset(this->driver->screenData, 0x00, kGBScreenWidth * kGBScreenHeight * sizeof(UInt32));
+
+        __GBGraphicsDriverVBlankReset(this->driver);
     }
 }
 
@@ -240,6 +248,13 @@ GBCoordPort *GBCoordPortCreate(void)
 void __GBCoordPortWrite(GBCoordPort *this, UInt8 byte)
 {
     this->value = 0;
+}
+
+void __GBVideoPortGenericDebugWrite(GBVideoPortGeneric *reg, UInt8 byte)
+{
+    printf("Port 0x%04X: 0x%04X --> 0x%04X\n", reg->address, reg->value, byte);
+
+    __GBIORegisterSimpleWrite((GBIORegister *)reg, byte);
 }
 
 GBVideoPortGeneric *GBVideoPortGenericCreate(UInt16 address)
@@ -358,7 +373,8 @@ GBGraphicsDriver *GBGraphicsDriverCreate(void)
 
         driver->drawingWindow = false;
 
-        driver->fetcherPosition = 0x1C00;
+        driver->fetcherBase = 0x1C00;
+        driver->fetcherPosition = 0;
         driver->fetcherOffset = 0;
         driver->fetcherMode = kGBFetcherStateFetchTile;
 
@@ -368,10 +384,10 @@ GBGraphicsDriver *GBGraphicsDriverCreate(void)
         driver->lineMod8 = 0;
         driver->driverX = 0;
 
-        driver->colorLookup[0] = 0xBBBBBB; // white
-        driver->colorLookup[1] = 0xEEEEEE; // light gray
-        driver->colorLookup[2] = 0x555555; // dark gray
-        driver->colorLookup[3] = 0x000000; // black
+        driver->colorLookup[0] = 0xEEEEEEEE; // white
+        driver->colorLookup[1] = 0xBBBBBBBB; // light gray
+        driver->colorLookup[2] = 0x55555555; // dark gray
+        driver->colorLookup[3] = 0x00000000; // black
 
         driver->nullColor = 0x00000000;
 
@@ -412,6 +428,18 @@ bool __GBGraphicsDriverInstall(GBGraphicsDriver *this, struct __GBGameboy *gameb
     GBIOMapperInstallPort(gameboy->mmio, (GBIORegister *)this->paletteSprite1);
 
     return true;
+}
+
+void __GBGraphicsDriverVBlankReset(GBGraphicsDriver *this)
+{
+    this->fetcherBase = (this->control->value & 0x08) ? 0x1C00 : 0x1800;
+    this->fetcherPosition = (this->scrollY->value / kGBTileHeight) * kGBMapWidth;
+    this->linePointer = this->screenData;
+
+    this->lineMod8 = this->scrollY->value % 8;
+    this->coordinate->value = 0;
+
+    this->fetcherOffset = 0;
 }
 
 void __GBGraphicsDriverSetMode(GBGraphicsDriver *this, UInt8 mode)
@@ -515,7 +543,6 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
 
             // control & 0x10; highmap
 
-#if 0
             // FIFO
             if (true)
             {
@@ -524,7 +551,7 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                 {
                     UInt8 nextPixel = this->fifoBuffer[this->fifoPosition++];
                     UInt8 palette = nextPixel & 0x0F;
-                    UInt8 color = nextPixel >> 8;
+                    UInt8 color = nextPixel >> 4;
 
                     // We have to figure out the pixel's RGB by looking it up in the palette and the current color map
                     UInt8 trueColor;
@@ -541,7 +568,9 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                     // Finally lookup based on selected RGB values
                     UInt32 nextPixelRGB = this->colorLookup[trueColor];
 
-                    //printf("Calculated RGB 0x%06X for pixel %d%d with mapped value %d%d\n", nextPixelRGB, color >> 1, color & 1, trueColor >> 1, trueColor & 1);
+                    /*if (trueColor != 0)
+                        printf("Calculated RGB 0x%06X for pixel %d%d with mapped value %d%d\n", nextPixelRGB, color >> 1, color & 1, trueColor >> 1, trueColor & 1);*/
+
                     // Output only if we've discarded enough pixels to get to the starting x position
                     if (!(this->driverX < this->scrollX->value))
                         this->linePointer[this->linePosition++] = nextPixelRGB;
@@ -563,10 +592,12 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                             this->fifoSize = 0;
 
                             // Set fetcher offset to the start of the window (on the given row)
-                            UInt16 windowMapOffset = (this->control->value & 0x40) ? 0x1C00 : 0x1800;
                             UInt8 currentWindowRow = this->coordinate->value - this->windowY->value;
 
-                            this->fetcherOffset = windowMapOffset + (currentWindowRow * 32);
+                            this->fetcherBase = (this->control->value & 0x40) ? 0x1C00 : 0x1800;
+                            this->fetcherPosition = (currentWindowRow / kGBTileHeight) * kGBMapWidth;
+                            this->fetcherOffset = 0;
+
                             this->drawingWindow = true;
                         }
                     }
@@ -582,10 +613,10 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                 switch (this->fetcherMode)
                 {
                     case kGBFetcherStateFetchTile: {
-                        this->fetcherTile = this->vram->memory[this->fetcherPosition + this->fetcherOffset++];
+                        this->fetcherTile = this->vram->memory[this->fetcherBase + this->fetcherPosition + this->fetcherOffset++];
 
-                        if (this->fetcherTile != 0x00)
-                        printf("Fetcher: Tile 0x%02X read for position 0x%04X [based at 0x%04X]\n", this->fetcherTile, this->fetcherOffset - 1, this->fetcherPosition);
+                        /*if (this->fetcherTile)
+                            printf("Fetcher: Tile 0x%02X read for position 0x%04X [based at 0x%04X]\n", this->fetcherTile, this->fetcherOffset - 1, this->fetcherPosition);*/
 
                         for (UInt8 i = 0; i < 8; i++)
                             this->fetchBuffer[i] = 0 /* palette index */;
@@ -598,9 +629,12 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
 
                         this->fetcherByte0 = this->vram->memory[address];
 
+                        /*if (this->fetcherTile)
+                            printf("Tile 0x%02X row 0x%02X byte 0 read as 0x%02X (tileset at 0x8%03X)\n", this->fetcherTile, this->lineMod8, this->fetcherByte0, tileset);*/
+
                         // Push back first byte of each pixel (into top nibble)
                         for (UInt8 i = 0; i < 8; i++)
-                            this->fetchBuffer[i] = ((this->fetcherByte0 >> i) & 1) << 4;
+                            this->fetchBuffer[i] |= ((this->fetcherByte0 >> i) & 1) << 4;
 
                         this->fetcherMode = kGBFetcherStateFetchByte1;
                     } break;
@@ -612,7 +646,12 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
 
                         // Push back second byte of each pixel (into top nibble)
                         for (UInt8 i = 0; i < 8; i++)
-                            this->fetchBuffer[i] = ((this->fetcherByte1 >> i) & 1) << 5;
+                        {
+                            this->fetchBuffer[i] |= ((this->fetcherByte1 >> i) & 1) << 5;
+
+                            /*if (this->fetcherTile)
+                                printf("Tile 0x%02X row 0x%02X pixel %d decoded with value %d\n", this->fetcherTile, this->lineMod8, i, (this->fetchBuffer[i] >> 4));*/
+                        }
 
                         // The fetcher wraps over x
                         if (this->fetcherOffset >= 32)
@@ -634,21 +673,27 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                                 memcpy(this->fifoBuffer + copyOffset, this->fetchBuffer, 8);
                             }
 
+                            /*if (this->fetcherTile)
+                            {
+                                printf("Pushed back the following 8 pixels to FIFO: {");
+
+                                for (SInt8 i = 7; i >= 0; i--)
+                                {
+                                    printf("0x%02X", this->fetchBuffer[i]);
+                                    if (i) printf(", ");
+                                }
+
+                                printf("}\n");
+                            }*/
+
                             this->fifoSize += 8;
                             this->fetcherMode = kGBFetcherStateFetchTile;
                         }
                     } break;
                 }
             }
-#endif
 
-            //  this->linePosition++;
-            // =-=-=-=-=-=-=-=-=-=-= //
-            UInt32 *line = &this->screenData[this->coordinate->value * kGBScreenWidth];
-            line[this->fifoPosition++] = 0x00FF0000;
-            // =-=-=-=-=-=-=-=-=-=-= //
-
-            if (this->fifoPosition == kGBScreenWidth)
+            if (this->linePosition == kGBScreenWidth)
             {
                 __GBGraphicsDriverSetMode(this, kGBDriverStateHBlank);
 
@@ -670,6 +715,10 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                     __GBGraphicsDriverSetMode(this, kGBDriverStateSpriteSearch);
                 }
 
+                this->driverModeTicks = 0;
+                this->lineSpriteCount = 0;
+                this->spriteIndex = 0;
+
                 this->linePointer += kGBScreenWidth;
                 this->linePosition = 0;
 
@@ -678,27 +727,22 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
 
                 this->drawingWindow = false;
 
-                this->fetcherMode = kGBFetcherStateFetchTile;
-                this->fetcherOffset = 0;
-
-                this->lineSpriteCount = 0;
-                this->spriteIndex = 0;
+                this->driverX = 0;
 
                 this->lineMod8++;
                 this->lineMod8 %= 8;
 
-                this->driverX = 0;
+                this->fetcherMode = kGBFetcherStateFetchTile;
+                this->fetcherOffset = 0;
 
-                this->fetcherPosition = (this->control->value & 0x08) ? 0x1C00 : 0x1800;
+                // We need another row of tiles
+                if (!this->lineMod8)
+                {
+                    this->fetcherPosition += kGBMapWidth;
 
-                // This is how many rows we are off of the origin of the background map.
-                UInt16 fetcherAdjust = (this->coordinate->value + this->scrollY->value);
-
-                // Wrap around the bottom axis
-                if (fetcherAdjust >= kGBFullHeight)
-                    fetcherAdjust %= kGBFullHeight;
-
-                this->fetcherPosition += ((fetcherAdjust % 8) * 32);
+                    if (this->fetcherPosition >= (kGBMapWidth * kGBMapHeight))
+                        this->fetcherPosition = 0;
+                }
 
                 return;
             }
@@ -716,13 +760,7 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
             {
                 __GBGraphicsDriverSetMode(this, kGBDriverStateSpriteSearch);
 
-                this->fetcherPosition = (this->control->value & 0x08) ? 0x1C00 : 0x1800;
-                this->linePointer = this->screenData;
-
-                this->lineMod8 = this->scrollY->value % 8;
-                this->coordinate->value = 0;
-
-                this->fetcherPosition += (this->scrollY->value * 32);
+                __GBGraphicsDriverVBlankReset(this);
             }
 
             __GBGraphicsDriverCheckCoincidence(this);

@@ -146,8 +146,16 @@ GBVideoPortGeneric *GBVideoPortGenericCreate(UInt16 address);
 #define kGBColorDarkGray                0x555555
 #define kGBColorBlack                   0x000000
 
+// In Pixels
 #define kGBFullHeight                   256
 #define kGBFullWidth                    256
+
+// In Tiles
+#define kGBMapHeight                    32
+#define kGBMapWidth                     32
+
+#define kGBTileHeight                   8
+#define kGBTileWidth                    8
 
 #define kGBScreenHeight                 144
 #define kGBScreenWidth                  160
@@ -219,8 +227,9 @@ typedef struct __GBGraphicsDriver {
     UInt8 fetcherTile; // The index into the tileset of the last fetched tile
     UInt8 fetcherByte0; // The first byte of the last fetched tile
     UInt8 fetcherByte1; // The second byte of the last fetched tile
-    UInt16 fetcherPosition; // The location of the background/window map currently being read from.
-    UInt8 fetcherOffset; // The offset into the background/window map currently being read.
+    UInt16 fetcherBase; // The base address of the fetcher
+    UInt16 fetcherPosition; // The position in the map of the start of the current line
+    UInt8 fetcherOffset; // The current offset into the current line being rendered
     UInt8 fetcherMode; // The state of memory access for the fetcher.
 
     // We can only draw 10 sprites per line.
