@@ -155,7 +155,7 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
     {
         char code = [keys characterAtIndex:i];
 
-        printf("Pressed '%c'\n", code);
+        //printf("Pressed '%c'\n", code);
 
         switch (code)
         {
@@ -179,7 +179,7 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
     {
         char code = [keys characterAtIndex:i];
 
-        printf("Released '%c'\n", code);
+        //printf("Released '%c'\n", code);
 
         switch (code)
         {

@@ -7,5 +7,6 @@ out vec3 color;
 
 void main(void)
 {
-    color = texture(screenBuffer, coordinate).rgb;
+    vec2 coord = vec2(coordinate.x, 1.0F - coordinate.y);
+    color = texture(screenBuffer, coord).rgb;
 }

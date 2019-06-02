@@ -206,7 +206,7 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
 
 - (void) decodeTile:(UInt8 *)tileSource into:(UInt32 [kGBTileWidth * kGBTileHeight])result
 {
-    UInt32 lookup[4] = {0xEEEEEE, 0x000000, 0x555555, 0xBBBBBB};
+    UInt32 lookup[4] = {0xEEEEEE, 0xBBBBBB, 0x555555, 0x000000};
 
     for (UInt8 y = 0; y < (2 * kGBTileHeight); y += 2)
     {
