@@ -95,7 +95,7 @@ void __GBClockTimerDebug(GBClock *this, GBProcessor *cpu, GBGraphicsDriver *driv
     if (!lastFetch && cpu->state.mode == kGBProcessorModeFetch)
         lastFetch = this->internalTick;
 
-    if (cpu->state.mode == kGBProcessorModeFetch)
+    /*if (cpu->state.mode == kGBProcessorModeFetch)
     {
         UInt64 diff = this->internalTick - lastFetch;
         lastFetch = this->internalTick;
@@ -103,7 +103,7 @@ void __GBClockTimerDebug(GBClock *this, GBProcessor *cpu, GBGraphicsDriver *driv
         const char *opString = (cpu->state.prefix ? cpu->decode_prefix[cpu->state.op]->name : cpu->decode[cpu->state.op]->name);
 
         //printf("Info: Instruction '%s' ran in %llu ticks.\n", opString, diff);
-    }
+    }*/
 
     static CFAbsoluteTime time = 0;
 
@@ -129,13 +129,13 @@ void __GBClockTimerDebug(GBClock *this, GBProcessor *cpu, GBGraphicsDriver *driv
         if (!lastScreenBegin && driver->driverMode == kGBDriverStateSpriteSearch)
             lastScreenBegin = this->internalTick;
 
-        if (lastMode == kGBDriverStateVBlank && driver->driverMode == kGBDriverStateSpriteSearch)
+        /*if (lastMode == kGBDriverStateVBlank && driver->driverMode == kGBDriverStateSpriteSearch)
         {
             UInt64 diff = this->internalTick - lastScreenBegin;
             lastScreenBegin = this->internalTick;
 
             //printf("Info: Last screen drawn in %llu ticks.\n", diff);
-        }
+        }*/
 
         lastMode = driver->driverMode;
     }

@@ -480,6 +480,31 @@
                     <modifierMask key="keyEquivalentModifierMask"/>
                     <menu key="submenu" title="View" id="HyV-fh-RgO">
                         <items>
+                            <menuItem title="1x Size" tag="1" keyEquivalent="1" id="Ynv-4N-aet">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="resizeScreen:" target="Voe-Tx-rLC" id="UJ5-qH-13G"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="2x Size" tag="2" keyEquivalent="2" id="22D-yf-Izu">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="resizeScreen:" target="Voe-Tx-rLC" id="OpV-hm-avJ"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="4x Size" tag="4" keyEquivalent="3" id="Ho9-Vm-ADR">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="resizeScreen:" target="Voe-Tx-rLC" id="sJg-cw-sVI"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="8x Size" tag="8" keyEquivalent="4" id="bGp-Tj-ABC">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="resizeScreen:" target="Voe-Tx-rLC" id="lPV-g4-1RU"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem isSeparatorItem="YES" id="WnN-0P-we8"/>
                             <menuItem title="Enter Full Screen" keyEquivalent="f" id="4J7-dP-txa">
                                 <modifierMask key="keyEquivalentModifierMask" control="YES" command="YES"/>
                                 <connections>
@@ -523,6 +548,11 @@
                             <menuItem title="VRAM Image" keyEquivalent="4" id="LBc-17-kfV">
                                 <connections>
                                     <action selector="focusBackground:" target="Voe-Tx-rLC" id="WkF-B2-3nf"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Controller" keyEquivalent="0" id="egO-dZ-4kF">
+                                <connections>
+                                    <action selector="focusController:" target="Voe-Tx-rLC" id="mwR-j3-PaT"/>
                                 </connections>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="eu3-7i-yIM"/>

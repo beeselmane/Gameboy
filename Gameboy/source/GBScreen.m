@@ -31,6 +31,13 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
     return (self = [self initWithWindowNibName:@"GBScreen"]);
 }
 
+- (void) resize:(NSUInteger)multiplier
+{
+    CGSize size = NSMakeSize(144.0F * multiplier, 160.0F * multiplier);
+
+    [[self window] setFrame:(CGRect){[[self window] frame].origin, size} display:NO];
+}
+
 - (void) windowDidLoad
 {
     [super windowDidLoad];
@@ -145,53 +152,31 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
     return YES;
 }
 
-// TODO: Swapout with configurable keycodes
-// Other note: I would make these into a single function and use performSelector, but it's more trouble than it's worth (see render loop workaround below)
 - (void) keyDown:(NSEvent *)event
 {
+    NSDictionary *map = [[NSUserDefaults standardUserDefaults] dictionaryForKey:kGBSettingsKeymap];
     NSString *keys = [event charactersIgnoringModifiers];
 
     for (NSUInteger i = 0; i < [keys length]; i++)
     {
-        char code = [keys characterAtIndex:i];
+        NSString *keycode = [keys substringWithRange:NSMakeRange(i, 1)];
 
-        //printf("Pressed '%c'\n", code);
-
-        switch (code)
-        {
-            case 'w':  [[[GBAppDelegate instance] gameboy] pressKey:kGBGamepadUp];       break;
-            case 'a':  [[[GBAppDelegate instance] gameboy] pressKey:kGBGamepadLeft];     break;
-            case 's':  [[[GBAppDelegate instance] gameboy] pressKey:kGBGamepadDown];     break;
-            case 'd':  [[[GBAppDelegate instance] gameboy] pressKey:kGBGamepadRight];    break;
-            case 'p':  [[[GBAppDelegate instance] gameboy] pressKey:kGBGamepadA];        break;
-            case 'l':  [[[GBAppDelegate instance] gameboy] pressKey:kGBGamepadB];        break;
-            case '\\': [[[GBAppDelegate instance] gameboy] pressKey:kGBGamepadStart];    break;
-            case ']':  [[[GBAppDelegate instance] gameboy] pressKey:kGBGamepadSelect];   break;
-        }
+        if ([map objectForKey:keycode])
+            [[[GBAppDelegate instance] gameboy] pressKey:[[map objectForKey:keycode] integerValue]];
     }
 }
 
 - (void) keyUp:(NSEvent *)event
 {
+    NSDictionary *map = [[NSUserDefaults standardUserDefaults] dictionaryForKey:kGBSettingsKeymap];
     NSString *keys = [event charactersIgnoringModifiers];
 
     for (NSUInteger i = 0; i < [keys length]; i++)
     {
-        char code = [keys characterAtIndex:i];
+        NSString *keycode = [keys substringWithRange:NSMakeRange(i, 1)];
 
-        //printf("Released '%c'\n", code);
-
-        switch (code)
-        {
-            case 'w':  [[[GBAppDelegate instance] gameboy] liftKey:kGBGamepadUp];       break;
-            case 'a':  [[[GBAppDelegate instance] gameboy] liftKey:kGBGamepadLeft];     break;
-            case 's':  [[[GBAppDelegate instance] gameboy] liftKey:kGBGamepadDown];     break;
-            case 'd':  [[[GBAppDelegate instance] gameboy] liftKey:kGBGamepadRight];    break;
-            case 'p':  [[[GBAppDelegate instance] gameboy] liftKey:kGBGamepadA];        break;
-            case 'l':  [[[GBAppDelegate instance] gameboy] liftKey:kGBGamepadB];        break;
-            case '\\': [[[GBAppDelegate instance] gameboy] liftKey:kGBGamepadStart];    break;
-            case ']':  [[[GBAppDelegate instance] gameboy] liftKey:kGBGamepadSelect];   break;
-        }
+        if ([map objectForKey:keycode])
+            [[[GBAppDelegate instance] gameboy] liftKey:[[map objectForKey:keycode] integerValue]];
     }
 }
 

@@ -65,6 +65,7 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
 @synthesize breakpointActive = _breakpointActive;
 
 @synthesize isRunning = _isRunning;
+@synthesize game = _game;
 
 @dynamic currentOpcode;
 @dynamic cpuMode;
@@ -110,9 +111,10 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
         return;
 
     GBGameboyPowerOn(self->gameboy);
-    _cartInstalled = YES;
-
     [self setIsRunning:YES];
+
+    _game = [NSString stringWithUTF8String:cart->title];
+    _cartInstalled = YES;
 }
 
 #pragma mark - Instance Variables
@@ -172,14 +174,25 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
     GBGameboyPowerOn(self->gameboy);
 }
 
+- (void) setKey:(UInt8)key pressed:(BOOL)pressed
+{
+    GBGamepadSetKeyState(self->gameboy->gamepad, key, pressed);
+}
+
+- (BOOL) isKeyPressed:(UInt8)key
+{
+    return GBGamepadIsKeyDown(self->gameboy->gamepad, key);
+}
+
 - (void) pressKey:(UInt8)key
 {
-    GBGamepadSetKeyState(self->gameboy->gamepad, key, true);
+    //NSLog(@"Pressed %d (%d, %d)\n", key, (key >> 2), key & 0x3);
+    [self setKey:key pressed:YES];
 }
 
 - (void) liftKey:(UInt8)key
 {
-    GBGamepadSetKeyState(self->gameboy->gamepad, key, false);
+    [self setKey:key pressed:NO];
 }
 
 - (UInt8) read:(UInt16)address

@@ -8,6 +8,8 @@
 
 - (instancetype) init;
 
+- (void) resize:(NSUInteger)multiplier;
+
 @end
 
 @interface GBScreenView : NSOpenGLView

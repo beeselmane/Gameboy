@@ -25,6 +25,7 @@ struct __GBGameboy;
 @property (readonly) NSString *currentOpcode;
 @property (readonly) BOOL cartInstalled;
 @property (readonly) UInt32 *screen;
+@property (readonly) NSString *game;
 @property (readonly) SInt8 cpuMode;
 
 @property UInt16 breakpointAddress;
@@ -39,6 +40,9 @@ struct __GBGameboy;
 - (void) tick:(NSUInteger)times;
 - (void) singleTick;
 - (void) powerOn;
+
+- (void) setKey:(UInt8)key pressed:(BOOL)pressed;
+- (BOOL) isKeyPressed:(UInt8)key;
 
 - (void) pressKey:(UInt8)key;
 - (void) liftKey:(UInt8)key;

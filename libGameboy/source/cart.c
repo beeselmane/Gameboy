@@ -196,21 +196,17 @@ GBCartridge *GBCartridgeCreate(UInt8 *romData, UInt32 romSize)
         UInt16 checksum = 0;
 
         if (header->licenseCode == 0x33) {
-            char title[12];
+            memcpy(cartridge->title, header->title, 11);
+            cartridge->title[11] = 0;
 
-            memcpy(title, header->title, 11);
-            title[11] = 0;
-
-            fprintf(stdout, "Info: Loading cartridge for '%s'\n", title);
+            fprintf(stdout, "Info: Loading cartridge for '%s'\n", cartridge->title);
             fprintf(stdout, "Info: Manufacturing code: %c%c%c%c\n",
                     header->maker[0], header->maker[1], header->maker[2], header->maker[3]);
         } else {
-            char title[17];
+            memcpy(cartridge->title, &header->title, 16);
+            cartridge->title[16] = 0;
 
-            memcpy(title, &header->title, 16);
-            title[16] = 0;
-
-            fprintf(stdout, "Info: Loading cartridge for '%s'\n", title);
+            fprintf(stdout, "Info: Loading cartridge for '%s'\n", cartridge->title);
         }
 
         for (UInt32 i = 0; i < romSize; i++)

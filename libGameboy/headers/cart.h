@@ -97,6 +97,7 @@ typedef struct __GBCartridge {
     bool hasRAM;
 
     bool installed;
+    char title[17];
 } GBCartridge;
 
 GBCartridge *GBCartridgeCreate(UInt8 *romData, UInt32 romSize);

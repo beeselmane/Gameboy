@@ -25,17 +25,15 @@ GBGamepad *GBGamepadCreate(void)
 
 void GBGamepadSetKeyState(GBGamepad *this, UInt8 key, bool pressed)
 {
-    this->pressed[key >> 3][key & 0x3] = pressed;
+    this->pressed[key >> 2][key & 0x3] = pressed;
 
     if (pressed)
-    {
         (*this->interruptFlag) &= (1 << kGBInterruptJoypad);
-    }
 }
 
 bool GBGamepadIsKeyDown(GBGamepad *this, UInt8 key)
 {
-    return this->pressed[key >> 3][key & 0x3];
+    return this->pressed[key >> 2][key & 0x3];
 }
 
 void GBGamepadDestroy(GBGamepad *this)

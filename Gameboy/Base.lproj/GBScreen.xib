@@ -6,7 +6,7 @@
         <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
     </dependencies>
     <objects>
-        <customObject id="-2" userLabel="File's Owner" customClass="GBScreen">
+        <customObject id="-2" userLabel="File's Owner" customClass="GBScreenWindow">
             <connections>
                 <outlet property="screenView" destination="SSO-T0-zFX" id="gnt-xh-2Uk"/>
             </connections>

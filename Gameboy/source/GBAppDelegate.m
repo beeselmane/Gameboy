@@ -2,6 +2,7 @@
 
 #import "GBGameboyInstance.h"
 #import "GBBackgroundWindow.h"
+#import "GBControllerWindow.h"
 #import "GBPaletteWindow.h"
 #import "GBStateWindow.h"
 #import "GBScreen.h"
@@ -11,6 +12,7 @@
 @synthesize gameboy = _gameboy;
 
 @synthesize backgroundWindow = _backgroundWindow;
+@synthesize controllerWindow = _controllerWindow;
 @synthesize paletteWindow = _paletteWindow;
 @synthesize stateWindow = _stateWindow;
 @synthesize screenWindow = _screenWindow;
@@ -25,6 +27,9 @@
     if ([[[self backgroundWindow] window] isVisible])
         [[self backgroundWindow] updateFrame];
 
+    if ([[[self controllerWindow] window] isVisible])
+        [[self controllerWindow] updateFrame];
+
     if ([[[self paletteWindow] window] isVisible])
         [[self paletteWindow] updateFrame];
 
@@ -34,17 +39,37 @@
 
 - (void) applicationWillFinishLaunching:(NSNotification *)notification
 {
+    NSDictionary *keymap = [[NSUserDefaults standardUserDefaults] dictionaryForKey:kGBSettingsKeymap];
+
+    if (!keymap)
+    {
+        NSDictionary *defaultKeymap = @{
+            @"w"  : [NSNumber numberWithInt:kGBGamepadUp],
+            @"a"  : [NSNumber numberWithInt:kGBGamepadLeft],
+            @"s"  : [NSNumber numberWithInt:kGBGamepadDown],
+            @"d"  : [NSNumber numberWithInt:kGBGamepadRight],
+            @"\\" : [NSNumber numberWithInt:kGBGamepadStart],
+            @"]"  : [NSNumber numberWithInt:kGBGamepadSelect],
+            @"p"  : [NSNumber numberWithInt:kGBGamepadA],
+            @"l"  : [NSNumber numberWithInt:kGBGamepadB]
+        };
+
+        [[NSUserDefaults standardUserDefaults] setObject:defaultKeymap forKey:kGBSettingsKeymap];
+    }
+
     _gameboy = [[GBGameboyInstance alloc] init];
 
     _screenWindow = [[GBScreenWindow alloc] init];
     _stateWindow = [[GBStateWindow alloc] init];
     _paletteWindow = [[GBPaletteWindow alloc] init];
+    _controllerWindow = [[GBControllerWindow alloc] init];
     _backgroundWindow = [[GBBackgroundWindow alloc] init];
 }
 
 - (void) applicationDidFinishLaunching:(NSNotification *)notification
 {
     [[[self backgroundWindow] window] orderOut:self];
+    [[[self controllerWindow] window] orderOut:self];
     [[[self paletteWindow] window] orderOut:self];
     [[[self stateWindow] window] orderOut:self];
 
@@ -86,11 +111,25 @@
     [[[self screenWindow] window] makeKeyAndOrderFront:self];
 }
 
+- (IBAction) focusController:(id)sender
+{
+    [[self controllerWindow] showWindow:sender];
+
+    [[[self controllerWindow] window] makeKeyAndOrderFront:self];
+}
+
 - (IBAction) focusBackground:(id)sender
 {
     [[self backgroundWindow] showWindow:sender];
 
     [[[self screenWindow] window] makeKeyAndOrderFront:self];
+}
+
+- (IBAction) resizeScreen:(NSMenuItem *)sender
+{
+    NSUInteger multiplier = [sender tag];
+
+    [[self screenWindow] resize:multiplier];
 }
 
 - (IBAction) startEmulation:(id)sender
@@ -125,6 +164,12 @@
         }
 
         [[self gameboy] installCartFromData:[NSData dataWithContentsOfURL:[openPanel URL]]];
+
+        [[[self backgroundWindow] window] setTitle:[NSString stringWithFormat:@"%@ — Background", [[self gameboy] game]]];
+        [[[self controllerWindow] window] setTitle:[NSString stringWithFormat:@"%@ — Controller", [[self gameboy] game]]];
+        [[[self paletteWindow] window] setTitle:[NSString stringWithFormat:@"%@ — Palette", [[self gameboy] game]]];
+        [[[self stateWindow] window] setTitle:[NSString stringWithFormat:@"%@ — State", [[self gameboy] game]]];
+        [[[self screenWindow] window] setTitle:[[self gameboy] game]];
     }
 }
 
