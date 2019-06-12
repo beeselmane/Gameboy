@@ -184,6 +184,9 @@
     if ([gameboy isRunning])
         return;
 
+    if (![gameboy poweredOn])
+        [gameboy powerOn];
+
     NSInteger ticks = [[[self textBoxStepCount] stringValue] integerValue];
 
     for (NSInteger i = 0; i < ticks; i++)
@@ -198,6 +201,9 @@
 
     if ([gameboy isRunning])
         return;
+
+    if (![gameboy poweredOn])
+        [gameboy powerOn];
 
     NSInteger steps = [[[self textBoxStepCount] stringValue] integerValue];
 
@@ -229,6 +235,9 @@
 
     [gameboy setBreakpointAddress:breakpointAddress];
     [gameboy setBreakpointActive:YES];
+
+    if (![gameboy poweredOn])
+        [gameboy powerOn];
 
     [gameboy setIsRunning:YES];
 

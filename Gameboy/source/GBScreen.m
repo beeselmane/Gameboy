@@ -31,6 +31,11 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
     return (self = [self initWithWindowNibName:@"GBScreen"]);
 }
 
+- (void) cleanup
+{
+    [[self screenView] cancelDisplayLink];
+}
+
 - (void) resize:(NSUInteger)multiplier
 {
     CGSize size = NSMakeSize(144.0F * multiplier, 160.0F * multiplier);
@@ -203,6 +208,12 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
     CVDisplayLinkStart([self displayLink]);
 }
 
+- (void) cancelDisplayLink
+{
+    CVDisplayLinkStop([self displayLink]);
+    CVDisplayLinkRelease([self displayLink]);
+}
+
 - (void) setup
 {
     [self setupContext];
@@ -277,6 +288,7 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
 
     CGFloat cps = 4194304;
     CGFloat ticks = cps * [self frameDelta];
+    ticks *= 2.0F;
 
     [[[GBAppDelegate instance] gameboy] tick:(NSUInteger)ticks];
     glBindVertexArray((GLuint)[self vertexArray]);

@@ -42,11 +42,16 @@ struct __GBGameboy {
 };
 
 GBGameboy *GBGameboyCreate(void);
-void GBGameboyInstallBIOS(GBGameboy *this, GBBIOSROM *bios);
+
+bool GBGameboyIsPoweredOn(GBGameboy *this);
+void GBGameboyPowerOff(GBGameboy *this);
 void GBGameboyPowerOn(GBGameboy *this);
 
-bool GBGameboyInsertCartridge(GBCartridge *cart);
-bool GBGameboyEjectCartridge(GBCartridge *cart);
+void GBGameboyInstallBIOS(GBGameboy *this, GBBIOSROM *bios);
+void GBGameboyMaskBIOS(GBGameboy *this, GBBIOSROM *bios);
+
+bool GBGameboyInsertCartridge(GBGameboy *this, GBCartridge *cart);
+bool GBGameboyEjectCartridge(GBGameboy *this, GBCartridge *cart);
 
 #endif /* __gameboy__ */
 

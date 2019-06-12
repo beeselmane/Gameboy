@@ -236,6 +236,8 @@ typedef struct __GBGraphicsDriver {
     UInt8 lineSprites[10]; // Index of the sprites to be drawn in the next line
     UInt8 lineSpriteCount; // Number of spites in the next line
     UInt8 spriteIndex; // Iterator for the sprite table in RAM
+    UInt8 nextSpriteY; // Y coordinate of the sprite we are checking
+    UInt8 nextSpriteX; // X coordinate of the sprite we are checking
 
     UInt16 driverModeTicks; // Ticks in the current mode
     UInt8 driverMode; // The current driver mode

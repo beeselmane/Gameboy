@@ -67,7 +67,9 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
 @synthesize isRunning = _isRunning;
 @synthesize game = _game;
 
+@dynamic isUsingHighMap;
 @dynamic currentOpcode;
+@dynamic poweredOn;
 @dynamic cpuMode;
 @dynamic screen;
 
@@ -110,14 +112,19 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
     if (!inserted)
         return;
 
-    GBGameboyPowerOn(self->gameboy);
     [self setIsRunning:YES];
+    [self powerOn];
 
     _game = [NSString stringWithUTF8String:cart->title];
     _cartInstalled = YES;
 }
 
 #pragma mark - Instance Variables
+
+- (BOOL) isUsingHighMap
+{
+    return !(gameboy->driver->control->value & 0x10);
+}
 
 - (NSString *) currentOpcode
 {
@@ -167,6 +174,16 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
 - (void) singleTick
 {
     GBClockTick(self->gameboy->clock);
+}
+
+- (BOOL) poweredOn
+{
+    return GBGameboyIsPoweredOn(self->gameboy);
+}
+
+- (void) powerOff
+{
+    GBGameboyPowerOff(self->gameboy);
 }
 
 - (void) powerOn
@@ -292,24 +309,19 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
     {
         for (UInt8 x = 0; x < kGBBackgroundTileCount; x++)
         {
-            UInt8 tile;
+            UInt16 tile = sourceData[(y * kGBBackgroundTileCount) + x];
 
-            if (isHighMap) {
-                SInt8 tid = (y * kGBBackgroundTileCount) + x;
-
-                // -128 ---  0  --- +127
-                //   0  --- 128 ---  255
-                tile = sourceData[tid + 128];
-            } else {
-                tile = sourceData[(y * kGBBackgroundTileCount) + x];
+            if (isHighMap)
+            {
+                if (!(tile & 0x80))
+                    tile |= 0x100;
             }
-
 
             for (UInt8 y0 = 0; y0 < kGBTileHeight; y0++)
             {
                 for (UInt8 x0 = 0; x0 < kGBTileWidth; x0++)
                 {
-                    NSUInteger color = tiles[tile][(y0 * kGBTileHeight) + x0];
+                    NSUInteger color = tiles[tile][(y0 * kGBTileHeight) + x0];;
 
                     NSUInteger rgb[3] = {
                         (color >> 16) & 0xFF,

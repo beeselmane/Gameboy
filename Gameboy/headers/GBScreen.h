@@ -8,6 +8,8 @@
 
 - (instancetype) init;
 
+- (void) cleanup;
+
 - (void) resize:(NSUInteger)multiplier;
 
 @end
@@ -34,6 +36,7 @@
 
 - (void) setupContext;
 - (void) setupDisplayLink;
+- (void) cancelDisplayLink;
 - (void) setup;
 - (void) callRenderer:(SEL)cmd;
 

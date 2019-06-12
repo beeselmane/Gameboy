@@ -1292,7 +1292,7 @@ op_wait(0xF2, 1, "ld a, c(" dIO ")", {
 });
 
 op_simple(0xF3, "di", {
-    printf("Interrupts disabled.\n");
+    //printf("Interrupts disabled.\n");
 
     cpu->state.ime = false;
 });
@@ -1342,7 +1342,7 @@ op_wait3(0xFA, 3, "ld a, (" d16 ")", {
 });
 
 op_simple(0xFB, "ei", {
-    printf("Interrupts enabled.\n");
+    //printf("Interrupts enabled.\n");
 
     cpu->state.enableIME = true;
 });

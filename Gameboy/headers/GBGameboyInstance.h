@@ -23,7 +23,9 @@ struct __GBGameboy;
 }
 
 @property (readonly) NSString *currentOpcode;
+@property (readonly) BOOL isUsingHighMap;
 @property (readonly) BOOL cartInstalled;
+@property (readonly) BOOL poweredOn;
 @property (readonly) UInt32 *screen;
 @property (readonly) NSString *game;
 @property (readonly) SInt8 cpuMode;
@@ -39,6 +41,8 @@ struct __GBGameboy;
 
 - (void) tick:(NSUInteger)times;
 - (void) singleTick;
+
+- (void) powerOff;
 - (void) powerOn;
 
 - (void) setKey:(UInt8)key pressed:(BOOL)pressed;

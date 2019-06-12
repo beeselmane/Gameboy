@@ -43,8 +43,8 @@ void GBGamepadDestroy(GBGamepad *this)
 
 void __GBGamepadWrite(GBGamepad *this, UInt8 byte)
 {
-    this->value &= 0xCF;
-    this->value |= byte & ~0xCF;
+    this->value = byte & ~0xCF;
+    this->value |= 0xCF;
 
     if (this->value & 0x20) {
         for (UInt8 i = 0; i < 4; i++)

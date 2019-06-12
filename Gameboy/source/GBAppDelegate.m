@@ -76,6 +76,13 @@
     [[self screenWindow] showWindow:self];
 }
 
+- (void) applicationWillTerminate:(NSNotification *)notification
+{
+    [[self screenWindow] cleanup];
+
+    // Cleanup [self gameboy] here...
+}
+
 - (NSApplicationTerminateReply) applicationShouldTerminate:(NSApplication *)sender
 {
     NSAlert *alert = [[NSAlert alloc] init];

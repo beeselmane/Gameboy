@@ -360,6 +360,8 @@ GBGraphicsDriver *GBGraphicsDriverCreate(void)
             return NULL;
         }
 
+        bzero(driver->screenData, kGBScreenWidth * kGBScreenHeight * sizeof(UInt32));
+
         driver->displayOn = false;
 
         driver->driverMode = kGBDriverStateVBlank;
@@ -490,32 +492,42 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
     switch (this->driverMode)
     {
         case kGBDriverStateSpriteSearch: {
-            // Do a sprite every two ticks
-            // This isn't *really* important, but I like it...
-            // Note: This is a result of the fact that video RAM is clocked at 2 MHz
-            if (this->driverModeTicks % 2)
-            {
-                if (this->lineSpriteCount == 10 || !(this->control->value & 1))
-                    break;
+            // Read the y position on the first tick and the x position on the second tick
+            // I'm pretty sure this is a more accurate way of doing this, but I'm not sure tbh
+            if ((this->driverModeTicks & 1)) {
+                // Just read the y position
+                this->nextSpriteY = this->oam->memory[this->spriteIndex].y;
+            } else {
+                this->nextSpriteX = this->oam->memory[this->spriteIndex].x;
 
-                GBSpriteDescriptor *sprite = &this->oam->memory[this->spriteIndex];
-                UInt8 spriteHeight = (this->control->value & 0x2) ? 16 : 8;
-                UInt8 spriteWidth = 8;
+                if (this->lineSpriteCount == 10 || !(this->control->value & 1)) {
+                    this->spriteIndex++;
+                } else {
+                    UInt8 spriteHeight = (this->control->value & 0x2) ? 8 : 16;
+                    UInt16 coordinate = this->coordinate->value + 16;
 
-                UInt8 spriteY = sprite->y + spriteHeight;
-                UInt8 spriteX = sprite->x + spriteWidth;
+                    UInt8 spriteBottomY = this->nextSpriteY + spriteHeight;
+                    UInt8 spriteTopY = this->nextSpriteY;
 
-                if (sprite->x <= this->driverX && this->driverX <= spriteX)
-                    if (sprite->y <= this->coordinate->value && this->coordinate->value <= spriteY)
-                        this->lineSprites[this->lineSpriteCount++] = this->spriteIndex;
+                    UInt8 spriteX = this->nextSpriteX - 8;
 
-                this->spriteIndex++;
+                    if (spriteX && spriteX < 160)
+                        if (spriteTopY <= coordinate && coordinate < spriteBottomY)
+                            this->lineSprites[this->lineSpriteCount++] = this->spriteIndex;
+
+                    this->spriteIndex++;
+                }
             }
 
-            if (this->driverModeTicks == kGBDriverSpriteSearchClocks)
+            if (this->spriteIndex == 40)
             {
+                if (this->driverModeTicks != kGBDriverSpriteSearchClocks)
+                    fprintf(stderr, "Error: Sprite search loop timing off!! (Completed in %d ticks [Should be %d!!])\n", this->driverModeTicks, kGBDriverSpriteSearchClocks);
+
                 __GBGraphicsDriverSetMode(this, kGBDriverStatePixelTransfer);
+
                 this->driverModeTicks = 0;
+                this->spriteIndex = 0;
 
                 return;
             }
@@ -576,7 +588,32 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
 
                     // Output only if we've discarded enough pixels to get to the starting x position
                     if (!(this->driverX < this->scrollX->value))
-                        this->linePointer[this->linePosition++] = nextPixelRGB;
+                    {
+                        if (this->spriteIndex < this->lineSpriteCount)
+                        {
+                            UInt16 index = this->lineSprites[this->spriteIndex];
+
+                            GBSpriteDescriptor *nextSprite = &this->oam->memory[index];
+                            UInt8 position = this->linePosition;
+
+                            UInt8 spriteRightX = nextSprite->x;
+                            UInt8 spriteLeftX = nextSprite->x - 8;
+
+                            if (spriteLeftX <= position) {
+                                //if (nextSprite->x == this->linePosition && this->coordinate->value == nextSprite->y)
+                                //    printf("Next sprite at (%d, %d)\n", nextSprite->x, nextSprite->y);
+
+                                this->linePointer[this->linePosition++] = 0xFF000000;
+                            } else {
+                                this->linePointer[this->linePosition++] = nextPixelRGB;
+                            }
+
+                            if (this->linePosition >= spriteRightX)
+                                this->spriteIndex++;
+                        } else {
+                            this->linePointer[this->linePosition++] = nextPixelRGB;
+                        }
+                    }
 
                     this->fifoSize--;
                     this->driverX++;
@@ -586,9 +623,9 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                         this->fifoPosition = 0;
 
                     // We clear FIFO and change to the window when we reach its x position
-                    if (!this->drawingWindow && this->control->value & 0x20) // Check if window enabled
+                    /*if (!this->drawingWindow && this->control->value & 0x20) // Check if window enabled
                     {
-                        if (this->coordinate->value >= this->windowY->value && this->driverX >= this->windowX->value)
+                        if (this->coordinate->value >= this->windowY->value && this->driverX >= (this->windowX->value + 7))
                         {
                             // 'clear' the FIFO buffer
                             this->fifoPosition = 0;
@@ -603,7 +640,7 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
 
                             this->drawingWindow = true;
                         }
-                    }
+                    }*/
                 }
             }
 
@@ -618,6 +655,9 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                     case kGBFetcherStateFetchTile: {
                         this->fetcherTile = this->vram->memory[this->fetcherBase + this->fetcherPosition + this->fetcherOffset++];
 
+                        if (!(this->control->value & 0x10))
+                            this->fetcherTile += 0x80;
+
                         /*if (this->fetcherTile)
                             printf("Fetcher: Tile 0x%02X read for position 0x%04X at offset 0x%04X [base: 0x%04X]\n", this->fetcherTile, this->fetcherPosition, this->fetcherOffset - 1, this->fetcherBase);*/
 
@@ -628,6 +668,7 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                     } break;
                     case kGBFetcherStateFetchByte0: {
                         UInt16 tileset = (this->control->value & 0x10) ? 0x0000 : 0x0800;
+
                         UInt16 address = tileset + ((2 * kGBTileHeight) * this->fetcherTile) + (2 * this->lineMod8) + 0;
 
                         this->fetcherByte0 = this->vram->memory[address];
@@ -643,6 +684,7 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, UInt64 ticks)
                     } break;
                     case kGBFetcherStateFetchByte1: {
                         UInt16 tileset = (this->control->value & 0x10) ? 0x0000 : 0x0800;
+
                         UInt16 address = tileset + ((2 * kGBTileHeight) * this->fetcherTile) + (2 * this->lineMod8) + 1;
 
                         this->fetcherByte1 = this->vram->memory[address];

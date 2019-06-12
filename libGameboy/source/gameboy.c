@@ -92,6 +92,29 @@ GBGameboy *GBGameboyCreate(void)
     return gameboy;
 }
 
+#pragma mark - Power State Functions
+
+bool GBGameboyIsPoweredOn(GBGameboy *this)
+{
+    return (this->cpu->state.mode != kGBProcessorModeOff);
+}
+
+void GBGameboyPowerOff(GBGameboy *this)
+{
+    while (this->cpu->state.mode != kGBProcessorModeFetch)
+        GBClockTick(this->clock);
+
+    this->cpu->state.mode = kGBProcessorModeOff;
+}
+
+void GBGameboyPowerOn(GBGameboy *this)
+{
+    if (this->cpu->state.mode == kGBProcessorModeOff)
+        this->cpu->state.mode = kGBProcessorModeFetch;
+}
+
+#pragma mark - BIOS Utility Functions
+
 void GBGameboyInstallBIOS(GBGameboy *this, GBBIOSROM *bios)
 {
     this->biosInstalled = bios->install(bios, this);
@@ -100,11 +123,23 @@ void GBGameboyInstallBIOS(GBGameboy *this, GBBIOSROM *bios)
         this->bios = bios;
 }
 
-void GBGameboyPowerOn(GBGameboy *this)
+void GBGameboyMaskBIOS(GBGameboy *this, GBBIOSROM *bios)
 {
-    this->cpu->state.mode = kGBProcessorModeFetch;
+    // Write to and reset this port. Once masked through this method, BIOS cannot be re-enabled by a game.
+    GBIORegister *port = this->mmio->portMap[kGBBIOSMaskPortAddress - kGBIOMapperFirstAddress];
+
+    port->write(port, true);
+    port->write(port, false);
 }
 
-bool GBGameboyInsertCartridge(GBCartridge *cart);
+#pragma mark - Cartridge Utility Functions
 
-bool GBGameboyEjectCartridge(GBCartridge *cart);
+bool GBGameboyInsertCartridge(GBGameboy *this, GBCartridge *cart)
+{
+    return GBCartridgeInsert(cart, this);
+}
+
+bool GBGameboyEjectCartridge(GBGameboy *this, GBCartridge *cart)
+{
+    return GBCartridgeEject(cart, this);
+}

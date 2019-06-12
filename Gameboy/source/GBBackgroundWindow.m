@@ -18,8 +18,8 @@
 {
     GBGameboyInstance *gameboy = [[GBAppDelegate instance] gameboy];
 
-    [[self imageView0] setImage:[gameboy generateImage:0 isHighMap:NO]];
-    [[self imageView1] setImage:[gameboy generateImage:1 isHighMap:NO]];
+    [[self imageView0] setImage:[gameboy generateImage:0 isHighMap:[gameboy isUsingHighMap]]];
+    [[self imageView1] setImage:[gameboy generateImage:1 isHighMap:[gameboy isUsingHighMap]]];
 }
 
 - (void) updateFrame
