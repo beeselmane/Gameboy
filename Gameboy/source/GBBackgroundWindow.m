@@ -38,7 +38,19 @@
 {
     [super windowDidLoad];
 
+    CGSize aspectSize = [[self imageView0] frame].size;
+    aspectSize.width += [[self imageView1] frame].size.width;
+
+    [[self imageView0] setImageScaling:NSImageScaleProportionallyUpOrDown];
+    [[self imageView1] setImageScaling:NSImageScaleProportionallyUpOrDown];
+    [[self window] setAspectRatio:aspectSize];
+
     [self updateImages];
+}
+
+- (void) windowDidResize:(NSNotification *)notification
+{
+    //
 }
 
 - (BOOL) windowShouldClose:(NSWindow *)sender

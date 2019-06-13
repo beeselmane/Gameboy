@@ -9,6 +9,7 @@
         <customObject id="-2" userLabel="File's Owner" customClass="GBScreenWindow">
             <connections>
                 <outlet property="screenView" destination="SSO-T0-zFX" id="gnt-xh-2Uk"/>
+                <outlet property="window" destination="PWq-r8-W3q" id="k9E-xK-uRv"/>
             </connections>
         </customObject>
         <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>

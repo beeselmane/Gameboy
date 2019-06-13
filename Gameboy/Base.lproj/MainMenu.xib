@@ -82,8 +82,29 @@
                                 </connections>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="csQ-qv-aPI"/>
-                            <menuItem title="???" id="fVa-PG-7Ha">
-                                <modifierMask key="keyEquivalentModifierMask"/>
+                            <menuItem title="1x Speed" tag="1" keyEquivalent="1" id="ypv-Ze-nLw">
+                                <modifierMask key="keyEquivalentModifierMask" control="YES" command="YES"/>
+                                <connections>
+                                    <action selector="setEmulationSpeed:" target="Voe-Tx-rLC" id="b0V-sr-6s5"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="2x Speed" tag="2" keyEquivalent="2" id="NOl-4s-qQH">
+                                <modifierMask key="keyEquivalentModifierMask" control="YES" command="YES"/>
+                                <connections>
+                                    <action selector="setEmulationSpeed:" target="Voe-Tx-rLC" id="Htn-4L-f4p"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="3x Speed" tag="3" keyEquivalent="3" id="RVG-SC-I8D">
+                                <modifierMask key="keyEquivalentModifierMask" control="YES" command="YES"/>
+                                <connections>
+                                    <action selector="setEmulationSpeed:" target="Voe-Tx-rLC" id="NuY-u2-v3e"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="4x Speed" tag="4" hidden="YES" enabled="NO" keyEquivalent="4" id="vrM-or-oPc">
+                                <modifierMask key="keyEquivalentModifierMask" control="YES" command="YES"/>
+                                <connections>
+                                    <action selector="setEmulationSpeed:" target="Voe-Tx-rLC" id="eqS-FR-FJs"/>
+                                </connections>
                             </menuItem>
                         </items>
                     </menu>
@@ -498,7 +519,7 @@
                                     <action selector="resizeScreen:" target="Voe-Tx-rLC" id="sJg-cw-sVI"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="8x Size" tag="8" keyEquivalent="4" id="bGp-Tj-ABC">
+                            <menuItem title="8x Size" tag="8" hidden="YES" enabled="NO" keyEquivalent="8" id="bGp-Tj-ABC">
                                 <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
                                 <connections>
                                     <action selector="resizeScreen:" target="Voe-Tx-rLC" id="lPV-g4-1RU"/>

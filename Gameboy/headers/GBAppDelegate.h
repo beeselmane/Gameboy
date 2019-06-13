@@ -30,6 +30,7 @@
 - (IBAction) focusController:(id)sender;
 - (IBAction) focusBackground:(id)sender;
 - (IBAction) resizeScreen:(NSMenuItem *)sender;
+- (IBAction) setEmulationSpeed:(NSMenuItem *)sender;
 
 - (IBAction) startEmulation:(id)sender;
 - (IBAction) pauseEmulation:(id)sender;

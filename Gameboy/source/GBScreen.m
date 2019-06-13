@@ -38,9 +38,12 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
 
 - (void) resize:(NSUInteger)multiplier
 {
-    CGSize size = NSMakeSize(144.0F * multiplier, 160.0F * multiplier);
+    CGFloat titleHeight = [[self window] frame].size.height - [[self window] contentRectForFrameRect:[[self window] frame]].size.height;
+    CGSize size = NSMakeSize(160.0F * multiplier, 144.0F * multiplier);
+    size.height += titleHeight;
 
     [[self window] setFrame:(CGRect){[[self window] frame].origin, size} display:NO];
+    [[self screenView] setFrame:(CGRect){CGPointZero, CGSizeMake(size.width, size.height - titleHeight)}];
 }
 
 - (void) windowDidLoad
@@ -67,6 +70,8 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
 
 @synthesize lastFrameTime = _lastFrameTime;
 @synthesize frameDelta = _frameDelta;
+
+@synthesize emulationSpeed = _emulationSpeed;
 
 @synthesize newSize = _newSize;
 @synthesize resized = _resized;
@@ -216,6 +221,8 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
 
 - (void) setup
 {
+    [self setEmulationSpeed:1.0F];
+
     [self setupContext];
     [self setupDisplayLink];
 
@@ -288,7 +295,7 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
 
     CGFloat cps = 4194304;
     CGFloat ticks = cps * [self frameDelta];
-    ticks *= 2.0F;
+    ticks *= [self emulationSpeed];
 
     [[[GBAppDelegate instance] gameboy] tick:(NSUInteger)ticks];
     glBindVertexArray((GLuint)[self vertexArray]);

@@ -139,6 +139,11 @@
     [[self screenWindow] resize:multiplier];
 }
 
+- (IBAction) setEmulationSpeed:(NSMenuItem *)sender
+{
+    [[[self screenWindow] screenView] setEmulationSpeed:[sender tag]];
+}
+
 - (IBAction) startEmulation:(id)sender
 {
     [[self gameboy] setIsRunning:YES];

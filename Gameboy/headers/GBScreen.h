@@ -23,6 +23,8 @@
 @property (atomic, readonly) CFAbsoluteTime lastFrameTime;
 @property (atomic, readonly) CFTimeInterval frameDelta;
 
+@property (atomic) CGFloat emulationSpeed;
+
 @property (atomic) NSSize newSize;
 @property (atomic) BOOL resized;
 
