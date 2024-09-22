@@ -9,7 +9,7 @@
 
 #pragma mark - ROM Structure
 
-GBCartROM *GBCartROMCreateWithNullMapper(UInt8 *romData, UInt8 banks)
+GBCartROM *GBCartROMCreateGeneric(UInt8 *romData, UInt8 banks, UInt8 (*readFunc)(struct __GBCartROM *this, UInt16 address), void (*writeFunc)(struct __GBCartROM *this, UInt16 address, UInt8 byte))
 {
     GBCartROM *rom = malloc(sizeof(GBCartROM));
     UInt16 bankSize = kGBMemoryBankSize * 4;
@@ -28,8 +28,8 @@ GBCartROM *GBCartROMCreateWithNullMapper(UInt8 *romData, UInt8 banks)
         rom->install = GBCartROMOnInstall;
         rom->eject = GBCartROMOnEject;
 
-        rom->write = GBCartROMWriteNull;
-        rom->read = GBCartROMReadDirect;
+        rom->write = writeFunc;
+        rom->read = readFunc;
 
         rom->start = kGBCartROMBankLowStart;
         rom->end = kGBCartROMBankHighEnd;
@@ -42,6 +42,24 @@ GBCartROM *GBCartROMCreateWithNullMapper(UInt8 *romData, UInt8 banks)
 
     return rom;
 }
+
+GBCartROM *GBCartROMCreateWithNullMapper(UInt8 *romData, UInt8 banks)
+{
+    return GBCartROMCreateGeneric(romData, banks, GBCartROMReadBanked, GBCartROMWriteNull);
+}
+
+GBCartROM *GBCartROMCreateWithMBC1(UInt8 *romData, UInt8 banks)
+{
+    return GBCartROMCreateGeneric(romData, banks, GBCartROMReadBanked, GBCartROMWriteMBC1);
+}
+
+GBCartROM *GBCartROMCreateWithMBC2(UInt8 *romData, UInt8 banks);
+
+GBCartROM *GBCartROMCreateWithMBC3(UInt8 *romData, UInt8 banks);
+
+GBCartROM *GBCartROMCreateWithMBC4(UInt8 *romData, UInt8 banks);
+
+GBCartROM *GBCartROMCreateWithMBC5(UInt8 *romData, UInt8 banks);
 
 void GBCartROMDestroy(GBCartROM *this)
 {
@@ -57,23 +75,19 @@ void GBCartROMWriteNull(GBCartROM *this, UInt16 address, UInt8 byte)
     fprintf(stderr, "Warning: Attempting to write directly to ROM! (addr=0x%04X, byte=0x%02X)\n", address, byte);
 }
 
-UInt8 GBCartROMReadDirect(GBCartROM *s, UInt16 address)
+void GBCartROMWriteMBC1(GBCartROM *this, UInt16 address, UInt8 byte)
+{
+    //
+}
+
+UInt8 GBCartROMReadBanked(GBCartROM *s, UInt16 address)
 {
     if (address <= kGBCartROMBankLowEnd) {
         return s->romData[address];
     } else {
         UInt8 *bankStart = s->romData + (s->bank * (kGBMemoryBankSize * 4));
-        UInt16 offset = 0x0FFF & address;
 
-
-        switch (address & 0xF000)
-        {
-            case 0x4000: return bankStart[0x0000 | offset];
-            case 0x5000: return bankStart[0x1000 | offset];
-            case 0x6000: return bankStart[0x2000 | offset];
-            case 0x7000: return bankStart[0x3000 | offset];
-            default:     return 0xFF;
-        }
+        return bankStart[address - 0x4000];
     }
 }
 
@@ -101,7 +115,7 @@ bool GBCartROMOnEject(GBCartROM *this, GBGameboy *gameboy)
 
 #pragma mark - RAM Structure
 
-GBCartRAM *GBCartRAMCreateWithNullMapper(UInt8 banks)
+GBCartRAM *GBCartRAMCreateWithBanks(UInt8 banks)
 {
     GBCartRAM *ram = malloc(sizeof(GBCartRAM));
 
@@ -133,6 +147,7 @@ GBCartRAM *GBCartRAMCreateWithNullMapper(UInt8 banks)
         ram->maxBank = banks;
         ram->bank = 0;
 
+        ram->enabled = true;
         ram->installed = false;
     }
 
@@ -150,6 +165,9 @@ void GBCartRAMDestroy(GBCartRAM *this)
 
 void GBCartRAMWriteDirect(GBCartRAM *this, UInt16 address, UInt8 byte)
 {
+    if (!this->enabled)
+        return;
+
     UInt8 *bankStart = this->ramData + (this->bank * (kGBMemoryBankSize * 2));
 
     bankStart[address & (~0xA0)] = byte;
@@ -157,6 +175,9 @@ void GBCartRAMWriteDirect(GBCartRAM *this, UInt16 address, UInt8 byte)
 
 UInt8 GBCartRAMReadDirect(GBCartRAM *this, UInt16 address)
 {
+    if (!this->enabled)
+        return 0xFF;
+
     UInt8 *bankStart = this->ramData + (this->bank * (kGBMemoryBankSize * 2));
 
     return bankStart[address & (~0xA0)];
@@ -184,6 +205,167 @@ bool GBCartRAMOnEject(GBCartRAM *this, GBGameboy *gameboy)
     return success;
 }
 
+#pragma mark - Cartridge Info Methods
+
+GBCartInfo *GBCartInfoCreateWithHeader(GBCartHeader *header, bool validate)
+{
+    GBCartInfo *info = malloc(sizeof(GBCartInfo));
+
+    if (info)
+    {
+        if (header->licenseCode == 0x33) {
+            memcpy(info->title, header->title, 11);
+            memcpy(info->maker, header->maker, 4);
+
+            info->title[11] = 0;
+        } else {
+            memcpy(info->title, &header->title, 16);
+            info->title[16] = 0;
+        }
+
+        if (validate)
+        {
+            UInt32 skipIndex = (UInt32)(&header->headerChecksum - ((UInt8 *)header));
+            UInt8 sum = 0;
+
+            for (UInt8 i = 0; i < sizeof(GBCartHeader); i++)
+            {
+                if (i == skipIndex)
+                    continue;
+
+                sum += ((UInt8 *)header)[i];
+            }
+
+            if (sum != header->headerChecksum)
+            {
+                fprintf(stderr, "Error: Header checksum invalid for cartridge '%s'! (Expected 0x%02X, Calculated 0x%02X)\n", info->title, header->headerChecksum, sum);
+
+                free(info);
+                return NULL;
+            }
+        }
+
+        info->mbcType = kGBCartMBCTypeNone;
+        info->hasBattery = false;
+        info->hasRumble = false;
+        info->hasTimer = false;
+
+        switch (header->type)
+        {
+            case 0x00:
+                info->mbcType = kGBCartMBCTypeNone;
+            break;
+
+            case 0x03:
+                info->hasBattery = true;
+            case 0x02:
+            case 0x01:
+                info->mbcType = kGBCartMBCType1;
+            break;
+
+            case 0x06:
+                info->hasBattery = true;
+            case 0x05:
+                info->mbcType = kGBCartMBCType2;
+            break;
+
+            case 0x09:
+                info->hasBattery = true;
+            case 0x08:
+                info->mbcType = kGBCartMBCTypeNone;
+            break;
+
+            case 0x0D:
+                info->hasBattery = true;
+            case 0x0C:
+            case 0x0B:
+                info->mbcType = kGBCartMBCTypeMMM01;
+            break;
+
+            case 0x0F:
+            case 0x10:
+                info->hasTimer = true;
+            case 0x13:
+                info->hasBattery = true;
+            case 0x12:
+            case 0x11:
+                info->mbcType = kGBCartMBCType3;
+            break;
+
+            case 0x17:
+                info->hasBattery = true;
+            case 0x16:
+            case 0x15:
+                info->mbcType = kGBCartMBCType4;
+            break;
+
+            case 0x1E:
+                info->hasBattery = true;
+            case 0x1D:
+            case 0x1C:
+                info->hasRumble = true;
+                info->mbcType = kGBCartMBCType5;
+            break;
+
+            case 0x1B:
+                info->hasBattery = true;
+            case 0x1A:
+            case 0x19:
+                info->mbcType = kGBCartMBCType5;
+            break;
+        }
+
+        if (header->romSize <= 0x07) {
+            info->romSize = (32 * 0x1000) << header->romSize; // 32 KB << header->romSize
+        } else {
+            switch (header->romSize)
+            {
+                case 0x52: info->romSize = 72 * (2 * kGBMemoryBankSize); break; // 72 banks
+                case 0x53: info->romSize = 80 * (2 * kGBMemoryBankSize); break; // 80 banks
+                case 0x54: info->romSize = 96 * (2 * kGBMemoryBankSize); break; // 96 banks
+                default:
+                    fprintf(stderr, "Warning: Unknown ROM size '0x%02X' in cart '%s'.\n", header->romSize, info->title);
+                    info->romSize = -1; // This means we were unable to determine ROM size.
+                    // The correct ROM size can be found by the parameter passed into GBCartridgeCreate after we return from this function.
+                break;
+            }
+        }
+
+        if (info->mbcType == kGBCartMBCType2) {
+            info->ramSize = 4 * 512;
+        } else {
+            switch (header->ramSize)
+            {
+                case 0: info->ramSize = 0; break;
+                case 1:
+                    info->ramSize = 2 * 0x1000; // 2 KB
+                break;
+                case 2:
+                    info->ramSize = 8 * 0x1000; // 8 KB
+                break;
+                case 3:
+                    info->ramSize = 4 * 8 * 0x1000; // 32 KB
+                break;
+                default:
+                    fprintf(stderr, "Warning: Unknown RAM size '0x%02X' in cart '%s'.\n", header->ramSize, info->title);
+                    info->ramSize = 0;
+                break;
+            }
+        }
+
+        info->romChecksum = (header->checksum >> 8) | (header->checksum << 8);
+        info->isJapanese = !header->destination;
+        info->romVersion = header->version;
+    }
+
+    return info;
+}
+
+void GBCartInfoDestroy(GBCartInfo *this)
+{
+    free(this);
+}
+
 #pragma mark - Cartridge Structure
 
 GBCartridge *GBCartridgeCreate(UInt8 *romData, UInt32 romSize)
@@ -192,70 +374,107 @@ GBCartridge *GBCartridgeCreate(UInt8 *romData, UInt32 romSize)
 
     if (cartridge)
     {
-        GBGameHeader *header = (GBGameHeader *)(romData + 0x100);
-        UInt16 checksum = 0;
+        GBCartHeader *header = (GBCartHeader *)(romData + kGBCartHeaderStart);
 
-        if (header->licenseCode == 0x33) {
-            memcpy(cartridge->title, header->title, 11);
-            cartridge->title[11] = 0;
+        cartridge->info = GBCartInfoCreateWithHeader(header, true);
 
-            fprintf(stdout, "Info: Loading cartridge for '%s'\n", cartridge->title);
-            fprintf(stdout, "Info: Manufacturing code: %c%c%c%c\n",
-                    header->maker[0], header->maker[1], header->maker[2], header->maker[3]);
-        } else {
-            memcpy(cartridge->title, &header->title, 16);
-            cartridge->title[16] = 0;
-
-            fprintf(stdout, "Info: Loading cartridge for '%s'\n", cartridge->title);
-        }
-
-        for (UInt32 i = 0; i < romSize; i++)
+        if (!cartridge->info)
         {
-            if (i == 0x014E || i == 0x014F)
-                continue;
-
-            checksum += romData[i];
-        }
-
-        checksum = ((checksum & 0xFF) << 8) | (checksum >> 8);
-
-        if (checksum == header->checksum)
-            fprintf(stdout, "Info: Checksum okay.\n");
-        else
-            fprintf(stdout, "Warning: Checksum invalid! (expected 0x%04X, calculated 0x%04X)\n", header->checksum, checksum);
-
-        if (header->type != 0x00)
-        {
-            fprintf(stderr, "Error: Unsupported cart. type\n");
+        fprintf(stderr, "Error: Attempted to load invalid cartridge (Or out of memory)!\n");
             free(cartridge);
 
             return NULL;
         }
 
-        if (header->romSize > 0x07) {
-            fprintf(stderr, "Error: Unknown ROM size.\n");
+        if (cartridge->info->romSize == -1)
+        {
+            // There was an invalid value in the header.
+            // We just take the largest multiple of the block size passed into this function.
+            cartridge->info->romSize = romSize & 0x3FFF;
+        }
+
+        if (cartridge->info->romSize < romSize)
+        {
+            fprintf(stderr, "Error: Cartridge ROM size smaller than data given!\n");
+
+            GBCartInfoDestroy(cartridge->info);
             free(cartridge);
 
             return NULL;
-        } else {
-            cartridge->rom = GBCartROMCreateWithNullMapper(romData, 1 + (1 << header->romSize));
+        }
 
-            if (!cartridge->rom)
+        UInt8 romBanks = cartridge->info->romSize / (4 * kGBMemoryBankSize);
+        UInt8 ramBanks = cartridge->info->ramSize / (2 * kGBMemoryBankSize);
+
+        if (cartridge->info->ramSize) {
+            cartridge->ram = GBCartRAMCreateWithBanks(ramBanks);
+
+            if (!cartridge->ram)
             {
+                GBCartInfoDestroy(cartridge->info);
                 free(cartridge);
 
                 return NULL;
             }
+        } else {
+            cartridge->ram = NULL;
         }
 
-        cartridge->hasRAM = false;
-        cartridge->ram = NULL;
+        switch (cartridge->info->mbcType)
+        {
+            case kGBCartMBCTypeNone:
+                cartridge->rom = GBCartROMCreateWithNullMapper(romData, romBanks);
+            break;
+            case kGBCartMBCType1:
+                cartridge->rom = GBCartROMCreateWithMBC1(romData, romBanks);
 
-        cartridge->mbcType = 0x00;
+                cartridge->ram->enabled = false;
+            break;
+            default: cartridge->rom = NULL; break;
+        }
+
+        if (!cartridge->rom)
+        {
+            GBCartInfoDestroy(cartridge->info);
+
+            if (cartridge->info->ramSize)
+                GBCartRAMDestroy(cartridge->ram);
+
+            free(cartridge);
+
+            return NULL;
+        }
+
         cartridge->installed = false;
     }
 
     return cartridge;
+}
+
+GBCartHeader *GBCartridgeGetHeader(GBCartridge *cart)
+{
+    return (GBCartHeader *)(cart->rom->romData + kGBCartHeaderStart);
+}
+
+bool GBCartridgeChecksumIsValid(GBCartridge *this)
+{
+    UInt16 *checksum = &((GBCartHeader *)(this->rom->romData + kGBCartHeaderStart))->checksum;
+    UInt16 offset = (UInt16)(((void *)checksum) - (void *)this->rom->romData);
+    UInt16 sum = 0;
+
+    assert(offset == 0x014E);
+
+    for (UInt32 i = 0; i < this->info->romSize; i++)
+    {
+        if (i == offset || i == (offset + 1))
+            continue;
+
+        sum += this->rom->romData[i];
+    }
+
+    fprintf(stdout, "Checksum calculated for cart '%s'. Expected 0x%04X, Calculated 0x%04X.\n", this->info->title, this->info->romChecksum, sum);
+
+    return (sum == this->info->romChecksum);
 }
 
 void GBCartridgeDestroy(GBCartridge *this)
@@ -265,34 +484,35 @@ void GBCartridgeDestroy(GBCartridge *this)
 
     GBCartROMDestroy(this->rom);
 
-    if (this->hasRAM)
+    if (this->info->ramSize)
         GBCartRAMDestroy(this->ram);
 
+    GBCartInfoDestroy(this->info);
     free(this);
 }
 
-bool GBCartridgeInsert(GBCartridge *this, GBGameboy *gameboy)
-{
-    bool success = this->rom->install(this->rom, gameboy);
-
-    if (!success)
-        return false;
-
-    if (this->hasRAM)
-        success = this->ram->install(this->ram, gameboy);
-
-    return success;
-}
-
-bool GBCartridgeEject(GBCartridge *this, GBGameboy *gameboy)
+bool GBCartridgeUnmap(GBCartridge *this, GBGameboy *gameboy)
 {
     bool success = this->rom->eject(this->rom, gameboy);
 
     if (!success)
         return false;
 
-    if (this->hasRAM)
+    if (this->info->ramSize)
         success = this->ram->eject(this->ram, gameboy);
+
+    return success;
+}
+
+bool GBCartridgeMap(GBCartridge *this, GBGameboy *gameboy)
+{
+    bool success = this->rom->install(this->rom, gameboy);
+
+    if (!success)
+        return false;
+
+    if (this->info->ramSize)
+        success = this->ram->install(this->ram, gameboy);
 
     return success;
 }

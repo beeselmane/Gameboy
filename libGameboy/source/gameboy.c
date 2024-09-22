@@ -136,10 +136,10 @@ void GBGameboyMaskBIOS(GBGameboy *this, GBBIOSROM *bios)
 
 bool GBGameboyInsertCartridge(GBGameboy *this, GBCartridge *cart)
 {
-    return GBCartridgeInsert(cart, this);
+    return GBCartridgeMap(cart, this);
 }
 
 bool GBGameboyEjectCartridge(GBGameboy *this, GBCartridge *cart)
 {
-    return GBCartridgeEject(cart, this);
+    return GBCartridgeUnmap(cart, this);
 }

@@ -2,6 +2,8 @@
 #import "GBGameboyInstance.h"
 #import "GBAppDelegate.h"
 
+#import <dispatch/dispatch.h>
+
 #import <OpenGL/gl3.h>
 
 extern CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTimeStamp *time, CVOptionFlags flagsIn, CVOptionFlags *flagsOut, void *context);
@@ -10,7 +12,9 @@ CVReturn GBRenderLoop(CVDisplayLinkRef link, const CVTimeStamp *now, const CVTim
 {
     GBScreenView *view = (__bridge GBScreenView *)context;
 
-    [view callRenderer:[view rendererName]];
+    dispatch_async(dispatch_get_main_queue(), ^() {
+        [view callRenderer:[view rendererName]];
+    });
 
     return kCVReturnSuccess;
 }

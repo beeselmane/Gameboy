@@ -107,7 +107,7 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
     if (!cart)
         return;
 
-    bool inserted = GBCartridgeInsert(cart, self->gameboy);
+    bool inserted = GBGameboyInsertCartridge(self->gameboy, cart);
 
     if (!inserted)
         return;
@@ -115,7 +115,7 @@ __attribute__((section("__TEXT,__rom"))) UInt8 gGBDMGEditedROM[0x100] = {
     [self setIsRunning:YES];
     [self powerOn];
 
-    _game = [NSString stringWithUTF8String:cart->title];
+    _game = [NSString stringWithUTF8String:(const char *)cart->info->title];
     _cartInstalled = YES;
 }
 

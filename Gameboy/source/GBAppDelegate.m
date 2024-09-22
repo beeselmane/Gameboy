@@ -173,9 +173,16 @@
         if ([[self gameboy] cartInstalled])
         {
             NSAlert *alert;
+            return;
         }
 
         [[self gameboy] installCartFromData:[NSData dataWithContentsOfURL:[openPanel URL]]];
+
+        if (![[self gameboy] cartInstalled])
+        {
+            NSAlert *alert;
+            return;
+        }
 
         [[[self backgroundWindow] window] setTitle:[NSString stringWithFormat:@"%@ — Background", [[self gameboy] game]]];
         [[[self controllerWindow] window] setTitle:[NSString stringWithFormat:@"%@ — Controller", [[self gameboy] game]]];

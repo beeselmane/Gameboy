@@ -13,6 +13,8 @@
 #define kGBCartRAMBankStart         0xA000
 #define kGBCartRAMBankEnd           0xBFFF
 
+#define kGBCartHeaderStart          0x0100
+
 typedef struct {
     UInt8 entry[3];
     UInt8 logo[48];
@@ -29,7 +31,7 @@ typedef struct {
     UInt8 version;
     UInt8 headerChecksum;
     UInt16 checksum;
-} GBGameHeader;
+} GBCartHeader;
 
 #pragma mark - ROM
 
@@ -46,15 +48,26 @@ typedef struct __GBCartROM {
     UInt8 *romData;
     UInt8 bank;
 
+    // Some MBCs have the ability to enable/disable their on-cart (built in) RAM
+    bool *ramEnable;
+
     bool installed;
     bool (*eject)(struct __GBCartROM *this, GBGameboy *gameboy);
 } GBCartROM;
 
+GBCartROM *GBCartROMCreateGeneric(UInt8 *romData, UInt8 banks, UInt8 (*readFunc)(struct __GBCartROM *this, UInt16 address), void (*writeFunc)(struct __GBCartROM *this, UInt16 address, UInt8 byte));
+
 GBCartROM *GBCartROMCreateWithNullMapper(UInt8 *romData, UInt8 banks);
+GBCartROM *GBCartROMCreateWithMBC1(UInt8 *romData, UInt8 banks);
+GBCartROM *GBCartROMCreateWithMBC2(UInt8 *romData, UInt8 banks);
+GBCartROM *GBCartROMCreateWithMBC3(UInt8 *romData, UInt8 banks);
+GBCartROM *GBCartROMCreateWithMBC4(UInt8 *romData, UInt8 banks);
+GBCartROM *GBCartROMCreateWithMBC5(UInt8 *romData, UInt8 banks);
 void GBCartROMDestroy(GBCartROM *this);
 
 void GBCartROMWriteNull(GBCartROM *this, UInt16 address, UInt8 byte);
-UInt8 GBCartROMReadDirect(GBCartROM *this, UInt16 address);
+void GBCartROMWriteMBC1(GBCartROM *this, UInt16 address, UInt8 byte);
+UInt8 GBCartROMReadBanked(GBCartROM *this, UInt16 address);
 
 bool GBCartROMOnInstall(GBCartROM *this, GBGameboy *gameboy);
 bool GBCartROMOnEject(GBCartROM *this, GBGameboy *gameboy);
@@ -74,11 +87,12 @@ typedef struct __GBCartRAM {
     UInt8 *ramData;
     UInt8 bank;
 
+    bool enabled;
     bool installed;
     bool (*eject)(struct __GBCartRAM *this, GBGameboy *gameboy);
 } GBCartRAM;
 
-GBCartRAM *GBCartRAMCreateWithNullMapper(UInt8 banks);
+GBCartRAM *GBCartRAMCreateWithBanks(UInt8 banks);
 void GBCartRAMDestroy(GBCartRAM *this);
 
 void GBCartRAMWriteDirect(GBCartRAM *this, UInt16 address, UInt8 byte);
@@ -87,24 +101,57 @@ UInt8 GBCartRAMReadDirect(GBCartRAM *this, UInt16 address);
 bool GBCartRAMOnInstall(GBCartRAM *this, GBGameboy *gameboy);
 bool GBCartRAMOnEject(GBCartRAM *this, GBGameboy *gameboy);
 
+#pragma mark - Cartridge Info
+
+enum {
+    kGBCartMBCTypeNone,
+    kGBCartMBCType1,
+    kGBCartMBCType2,
+    kGBCartMBCType3,
+    kGBCartMBCType4,
+    kGBCartMBCType5,
+    kGBCartMBCTypeMMM01
+};
+
+typedef struct {
+    UInt8 title[17];
+    UInt8 maker[4];
+    UInt8 licensee[2];
+    UInt8 mbcType;
+    UInt32 romSize;
+    UInt32 ramSize;
+    UInt8 romVersion;
+    UInt16 romChecksum;
+
+    bool hasBattery;
+    bool hasRumble;
+    bool hasTimer;
+
+    bool isJapanese;
+} GBCartInfo;
+
+GBCartInfo *GBCartInfoCreateWithHeader(GBCartHeader *header, bool validate);
+void GBCartInfoDestroy(GBCartInfo *this);
+
 #pragma mark - Cartridge
 
 typedef struct __GBCartridge {
+    GBCartInfo *info;
+
     GBCartROM *rom;
     GBCartRAM *ram;
 
-    UInt8 mbcType;
-    bool hasRAM;
-
     bool installed;
-    char title[17];
 } GBCartridge;
 
 GBCartridge *GBCartridgeCreate(UInt8 *romData, UInt32 romSize);
+GBCartHeader *GBCartridgeGetHeader(GBCartridge *cart);
+
+bool GBCartridgeChecksumIsValid(GBCartridge *this);
 void GBCartridgeDestroy(GBCartridge *this);
 
-bool GBCartridgeInsert(GBCartridge *this, GBGameboy *gameboy);
-bool GBCartridgeEject(GBCartridge *this, GBGameboy *gameboy);
+bool GBCartridgeUnmap(GBCartridge *this, GBGameboy *gameboy);
+bool GBCartridgeMap(GBCartridge *this, GBGameboy *gameboy);
 
 bool GBCartMemGenericOnEject(GBMemorySpace *this, GBGameboy *gameboy);
 
