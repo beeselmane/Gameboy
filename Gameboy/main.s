@@ -15,13 +15,12 @@ _main:
 #elif defined(__arm64__)
 
 _main:
-    sub    sp, sp, #32
-    stp    x29, x30, [sp, #16]
+    sub    sp, sp, #16
+    stp    x29, x30, [sp]
     add    x29, sp, #16
-    stur   wzr, [x29, #-4]
     bl    _NSApplicationMain
-    ldp    x29, x30, [sp, #16]
-    add    sp, sp, #32
+    ldp    x29, x30, [sp]
+    add    sp, sp, #16
     ret
 
 #else /* Unknown arch! */
