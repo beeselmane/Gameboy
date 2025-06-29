@@ -224,23 +224,18 @@ GBCartInfo *GBCartInfoCreateWithHeader(GBCartHeader *header, bool validate)
 
         if (validate)
         {
-            uint32_t skipIndex = (uint32_t)(&header->headerChecksum - ((uint8_t *)header));
             uint8_t sum = 0;
 
-            for (uint8_t i = 0; i < sizeof(GBCartHeader); i++)
-            {
-                if (i == skipIndex)
-                    continue;
-
-                sum += ((uint8_t *)header)[i];
+            for (uint8_t i = 0x34; i < 0x4D; i++) {
+                sum = sum - ((uint8_t *)header)[i] - 1;
             }
 
             if (sum != header->headerChecksum)
             {
                 fprintf(stderr, "Error: Header checksum invalid for cartridge '%s'! (Expected 0x%02X, Calculated 0x%02X)\n", info->title, header->headerChecksum, sum);
 
-                free(info);
-                return NULL;
+            //    free(info);
+            //    return NULL;
             }
         }
 
@@ -352,7 +347,7 @@ GBCartInfo *GBCartInfoCreateWithHeader(GBCartHeader *header, bool validate)
             }
         }
 
-        info->romChecksum = (header->checksum >> 8) | (header->checksum << 8);
+        info->romChecksum = (header->checksum[0] << 8) | header->checksum[1];
         info->isJapanese = !header->destination;
         info->romVersion = header->version;
     }
@@ -379,7 +374,7 @@ GBCartridge *GBCartridgeCreate(uint8_t *romData, uint32_t romSize)
 
         if (!cartridge->info)
         {
-        fprintf(stderr, "Error: Attempted to load invalid cartridge (Or out of memory)!\n");
+            fprintf(stderr, "Error: Attempted to load invalid cartridge (Or out of memory)!\n");
             free(cartridge);
 
             return NULL;

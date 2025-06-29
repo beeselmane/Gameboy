@@ -2,31 +2,33 @@ CFLAGS := -O2 -flto -Wall -Wextra -I.
 LIBTOOL ?= libtool
 CC ?= cc
 
-SRCS := $(wildcard src/*.c)
+ROOT ?= $(shell pwd)
 
-OBJS := $(patsubst src/%.c, build/%.o, $(SRCS))
+SRCS := $(wildcard $(ROOT)/src/*.c)
+
+OBJS := $(patsubst $(ROOT)/src/%.c, $(ROOT)/build/%.o, $(SRCS))
 
 .PHONY: libgb
 
-libgb: build/libgb.a
+libgb: $(ROOT)/build/libgb.a
 
-build:
-	mkdir -v build
+$(ROOT)/build:
+	mkdir -v $(ROOT)/build
 
-build/libgb.a: $(OBJS)
+$(ROOT)/build/libgb.a: $(OBJS)
 	libtool -static -o $@ -v $^
 
-build/%.o: src/%.c build
+$(ROOT)/build/%.o: $(ROOT)/src/%.c $(ROOT)/build
 	$(CC) $(CFLAGS) -o $@ -c $<
 
-build/%.d: src/%.c build
-	$(CC) $(CFLAGS) -MM $< $(patsubst src/%.c, build/%.o, $<) -MF $@
+$(ROOT)/build/%.d: $(ROOT)/src/%.c $(ROOT)/build
+	$(CC) $(CFLAGS) -MM $< $(patsubst $(ROOT)/src/%.c, $(ROOT)/build/%.o, $<) -MF $@
 
 .PHONY: clean
 
 clean:
-	rm -rvf build
+	rm -rvf $(ROOT)/build
 
 ifneq ($(MAKECOMDGOALS),clean)
--include $(patsubst %.c, build/%.d, $(SRCS))
+-include $(patsubst $(ROOT)/src/%.c, $(ROOT)/build/%.d, $(SRCS))
 endif

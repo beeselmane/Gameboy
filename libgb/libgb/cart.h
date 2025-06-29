@@ -34,7 +34,7 @@ typedef struct {
     uint8_t licenseCode;
     uint8_t version;
     uint8_t headerChecksum;
-    uint16_t checksum;
+    uint8_t checksum[2];
 } GBCartHeader;
 
 #pragma mark - ROM
