@@ -247,64 +247,83 @@ GBCartInfo *GBCartInfoCreateWithHeader(GBCartHeader *header, bool validate)
         switch (header->type)
         {
             case 0x00:
+                fprintf(stderr, "Cart has no MBC\n");
                 info->mbcType = kGBCartMBCTypeNone;
             break;
 
             case 0x03:
+                fprintf(stderr, "Cart has battery\n");
                 info->hasBattery = true;
             case 0x02:
             case 0x01:
+                fprintf(stderr, "Cart has MBC1\n");
                 info->mbcType = kGBCartMBCType1;
             break;
 
             case 0x06:
+                fprintf(stderr, "Cart has battery\n");
                 info->hasBattery = true;
             case 0x05:
+                fprintf(stderr, "Cart has MBC2\n");
                 info->mbcType = kGBCartMBCType2;
             break;
 
             case 0x09:
+                fprintf(stderr, "Cart has battery\n");
                 info->hasBattery = true;
             case 0x08:
+                fprintf(stderr, "Cart has no MBC\n");
                 info->mbcType = kGBCartMBCTypeNone;
             break;
 
             case 0x0D:
+                fprintf(stderr, "Cart has battery\n");
                 info->hasBattery = true;
             case 0x0C:
             case 0x0B:
+                fprintf(stderr, "Cart has MMM01\n");
                 info->mbcType = kGBCartMBCTypeMMM01;
             break;
 
             case 0x0F:
             case 0x10:
+                fprintf(stderr, "Cart has timer\n");
                 info->hasTimer = true;
             case 0x13:
+                fprintf(stderr, "Cart has battery\n");
                 info->hasBattery = true;
             case 0x12:
             case 0x11:
+                fprintf(stderr, "Cart has MBC3\n");
                 info->mbcType = kGBCartMBCType3;
             break;
 
             case 0x17:
+                fprintf(stderr, "Cart has battery\n");
                 info->hasBattery = true;
             case 0x16:
             case 0x15:
+                fprintf(stderr, "Cart has MBC4\n");
                 info->mbcType = kGBCartMBCType4;
             break;
 
             case 0x1E:
+                fprintf(stderr, "Cart has battery\n");
                 info->hasBattery = true;
             case 0x1D:
             case 0x1C:
+                fprintf(stderr, "Cart has rumble\n");
+                fprintf(stderr, "Cart has MBC5\n");
                 info->hasRumble = true;
                 info->mbcType = kGBCartMBCType5;
             break;
 
             case 0x1B:
+                fprintf(stderr, "Cart has battery\n");
                 info->hasBattery = true;
             case 0x1A:
             case 0x19:
+                fprintf(stderr, "Cart has MBC5\n");
                 info->mbcType = kGBCartMBCType5;
             break;
         }

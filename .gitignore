@@ -5,3 +5,4 @@ xcuserdata/
 
 games/*
 **/build
+.clangd

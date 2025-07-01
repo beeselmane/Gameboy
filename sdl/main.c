@@ -1,61 +1,78 @@
-#include <SDL3/SDL.h>
+#include "gameboy.h"
+#include <stdlib.h>
 
 #define SDL_MAIN_USE_CALLBACKS 1
 #include <SDL3/SDL_main.h>
 
-#include <libgb/gameboy.h>
-#include <sys/stat.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <fcntl.h>
+#define APP_NAME            "SDL Gameboy"
+#define APP_VERSION         "0.9"
+#define APP_ID              "com.beeselmane.sdlgb"
 
-#define SDLGB_DEBUG 1
+#define MAIN_WINDOW_NAME    "0 — Gameboy"
+#define MAIN_WINDOW_HEIGHT  kGBScreenHeight
+#define MAIN_WINDOW_WIDTH   kGBScreenWidth
+#define MAIN_WINDOW_RATIO   3.0F
+#define MAIN_BYTES_PER_ROW  (kGBScreenWidth * sizeof(uint32_t))
 
-#define LOG(level,  msg, ...) SDL_LogMessage(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_ ## level, msg __VA_OPT__(,) __VA_ARGS__)
+#define DEBUG_WINDOW_NAME   "1 — Debugger"
+#define DEBUG_WINDOW_HEIGHT 148 /* 12 lines of text */
+#define DEBUG_WINDOW_WIDTH  240 /* 27 rows of text */ 
+#define DEBUG_WINDOW_RATIO  2.0F
 
-#define APP_NAME        "SDL Gameboy"
-#define APP_VERSION     "0.9"
-#define APP_ID          "com.beeselmane.sdlgb"
-#define WINDOW_NAME     "Gameboy"
-#define WINDOW_HEIGHT   (kGBScreenHeight * 3)
-#define WINDOW_WIDTH    (kGBScreenWidth * 3)
-#define SEC_THRESHOLD   999999999
-#define REFRESH_NS      16742706 /* ~59.727500569606 Hz */
-#define GB_CPS          4194304 /* Gameboy clock ticks per second */
-#define BYTES_PER_ROW   (kGBScreenWidth * sizeof(uint32_t))
+#define TILE_WINDOW_NAME    "2 — Tileset"
+#define TILE_WINDOW_HEIGHT  kGBTilesetHeight
+#define TILE_WINDOW_WIDTH   kGBTilesetWidth 
+#define TILE_WINDOW_RATIO   2.0F
+#define TILE_BYTES_PER_ROW  (kGBTilesetWidth * sizeof(uint32_t))
 
-#define min(a, b) ((a) < (b) ? (a) : (b))
+#define BG_WINDOW_NAME      "3 — Backgrounds"
+#define BG_WINDOW_HEIGHT    ((kGBBackgroundHeight * 2) + 1)
+#define BG_WINDOW_WIDTH     kGBBackgroundWidth 
+#define BG_WINDOW_RATIO     2.0F
+#define BG_BYTES_PER_ROW    (kGBBackgroundWidth * sizeof(uint32_t))
 
-__attribute__((section("__TEXT,__rom"))) uint8_t gGBDMGEditedROM[0x100] = {
-    0x31, 0xFE, 0xFF, 0xAF, 0x21, 0xFF, 0x9F, 0x32, 0xCB, 0x7C, 0x20, 0xFB, 0x21, 0x26, 0xFF, 0x0E,
-    0x11, 0x3E, 0x80, 0x32, 0xE2, 0x0C, 0x3E, 0xF3, 0xE2, 0x32, 0x3E, 0x77, 0x77, 0x3E, 0xFC, 0xE0,
-    0x47, 0x11, 0x04, 0x01, 0x21, 0x10, 0x80, 0x1A, 0xCD, 0x95, 0x00, 0xCD, 0x96, 0x00, 0x13, 0x7B,
-    0xFE, 0x34, 0x20, 0xF3, 0x11, 0xD8, 0x00, 0x06, 0x08, 0x1A, 0x13, 0x22, 0x23, 0x05, 0x20, 0xF9,
-    0x3E, 0x19, 0xEA, 0x10, 0x99, 0x21, 0x2F, 0x99, 0x0E, 0x0C, 0x3D, 0x28, 0x08, 0x32, 0x0D, 0x20,
-    0xF9, 0x2E, 0x0F, 0x18, 0xF3, 0x67, 0x3E, 0x64, 0x57, 0xE0, 0x42, 0x3E, 0x91, 0xE0, 0x40, 0x04,
-    0x1E, 0x02, 0x0E, 0x0C, 0xF0, 0x44, 0xFE, 0x90, 0x20, 0xFA, 0x0D, 0x20, 0xF7, 0x1D, 0x20, 0xF2,
-    0x0E, 0x13, 0x24, 0x7C, 0x1E, 0x83, 0xFE, 0x62, 0x28, 0x06, 0x1E, 0xC1, 0xFE, 0x64, 0x20, 0x06,
-    0x7B, 0xE2, 0x0C, 0x3E, 0x87, 0xE2, 0xF0, 0x42, 0x90, 0xE0, 0x42, 0x15, 0x20, 0xD2, 0x05, 0x20,
-    0x4F, 0x16, 0x20, 0x18, 0xCB, 0x4F, 0x06, 0x04, 0xC5, 0xCB, 0x11, 0x17, 0xC1, 0xCB, 0x11, 0x17,
-    0x05, 0x20, 0xF5, 0x22, 0x23, 0x22, 0x23, 0xC9, 0xCE, 0xED, 0x66, 0x66, 0xCC, 0x0D, 0x00, 0x0B,
-    0x03, 0x73, 0x00, 0x83, 0x00, 0x0C, 0x00, 0x0D, 0x00, 0x08, 0x11, 0x1F, 0x88, 0x89, 0x00, 0x0E,
-    0xDC, 0xCC, 0x6E, 0xE6, 0xDD, 0xDD, 0xD9, 0x99, 0xBB, 0xBB, 0x67, 0x63, 0x6E, 0x0E, 0xEC, 0xCC,
-    0xDD, 0xDC, 0x99, 0x9F, 0xBB, 0xB9, 0x33, 0x3E, 0x3C, 0x42, 0xB9, 0xA5, 0xB9, 0xA5, 0x42, 0x3C,
-    0x21, 0x04, 0x01, 0x11, 0xA8, 0x00, 0x1A, 0x13, 0xBE, 0x00, 0x00, 0x23, 0x7D, 0xFE, 0x34, 0x20,
-    0xF5, 0x06, 0x19, 0x78, 0x86, 0x23, 0x05, 0x20, 0xFB, 0x86, 0x00, 0x00, 0x3E, 0x01, 0xE0, 0x50
-};
+#define OAM_WINDOW_NAME     "4 — Sprites"
+#define OAM_WINDOW_HEIGHT   kGBSpriteHeight
+#define OAM_WINDOW_WIDTH    kGBSpriteWidth 
+#define OAM_WINDOW_RATIO    3.0F
+#define OAM_BYTES_PER_ROW   (kGBSpriteWidth * sizeof(uint32_t))
 
-struct state {
+#define SEC_THRESHOLD       999999999
+#define REFRESH_NS          16742706 /* ~59.727500569606 Hz */
+
+struct window_state {
     SDL_Window *window;
     SDL_Renderer *renderer;
     SDL_Texture *texture;
+};
 
+struct state {
+    // Main GB screen + debug text
+    struct window_state screen;
+    char debug_fps[8];
+    char debug_cps[12];
+    bool show_debug;
+
+    // Various other windows
+    struct window_state bg;
+    struct window_state tiles;
+    struct window_state oam;
+    struct window_state debug;
+
+    // General timing info
     uint64_t sec;
     uint64_t ticks;
     uint64_t frame;
 
+    // Gameboy related info
     GBGameboy *gameboy;
+    gb_tileset tileset;
+    uint64_t clocks;
+    double clk_mult;
+    bool paused;
+
+    // Is there an open file dialog now?
+    bool showing_dialog;
 };
 
 struct state g_state;
@@ -63,115 +80,77 @@ struct state g_state;
 static void report_error(const char *title, const char *logmsg)
 {
     const char *error = SDL_GetError();
-
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title, error, NULL);
+
     LOG(CRITICAL, "%s Error: '%s'", logmsg, error);
 }
 
-static bool gameboy_init(struct state *state)
+static bool create_window(struct window_state *state, const char *name, int width, int height, float ratio, SDL_WindowFlags flags)
 {
-    state->gameboy = GBGameboyCreate();
-
-    if (!state->gameboy)
+    if (!SDL_CreateWindowAndRenderer(name, width * ratio, height * ratio, flags, &state->window, &state->renderer))
     {
+        report_error("Initialization Failed", "Failed to create window and renderer.");
         return false;
     }
 
-    GBBIOSROM *bios = GBBIOSROMCreate(gGBDMGEditedROM);
-    if (!bios) { return false; }
+    if (!(state->texture = SDL_CreateTexture(state->renderer, SDL_PIXELFORMAT_ARGB32, SDL_TEXTUREACCESS_STREAMING, width, height)))
+    {
+        report_error("Initialization Failed", "Failed to setup texture.");
+        return false;
+    }
 
-    GBGameboyInstallBIOS(state->gameboy, bios);
+    if (!SDL_SetRenderScale(state->renderer, ratio, ratio))
+    {
+        report_error("Initialization Failed", "Failed to setup render scale.");
+        return false;
+    }
+
+    LOG(INFO, "Created texture of size %u x %u", width, height);
+    return true;
+}
+
+static bool toggle_window(struct state *state, struct window_state *wnd)
+{
+    SDL_WindowFlags flags = SDL_GetWindowFlags(wnd->window);
+
+    if (flags & SDL_WINDOW_HIDDEN) {
+        return SDL_ShowWindow(wnd->window);
+    } else if (flags & SDL_WINDOW_INPUT_FOCUS && wnd != &state->screen) {
+        bool ok = SDL_HideWindow(wnd->window);
+        if (!ok) { return ok; }
+
+        return SDL_RaiseWindow(state->screen.window);
+    } else {
+        return SDL_RaiseWindow(wnd->window);
+    }
+}
+
+static bool handle_file(struct state *state, const char *path)
+{
+    if (!gameboy_load_file(state->gameboy, path)) {
+        return false;
+    }
+
+    LOG(INFO, "Inserted '%s'\n", path);
+    GBGameboyPowerOn(state->gameboy);
 
     return true;
 }
 
-static bool gameboy_load_file(struct state *state, const char *path)
+static void open_file_callback(void *userdata, const char *const *filelist, int filter)
 {
-    struct stat stats;
+    struct state *state = (struct state *)userdata;
+    state->showing_dialog = false;
 
-    if (stat(path, &stats))
-    {
-        perror("stat");
-        return false;
+    if (!filelist) {
+        LOG(ERROR, "Error selecting file. Error: '%s'", SDL_GetError());
+    } else if (!filelist[0]) {
+        LOG(INFO, "No file selected");
+    } else if (filelist[1]) {
+        LOG(WARN, "More than 1 file selected");
+    } else {
+        handle_file(state, filelist[0]);
     }
-
-    void *buf = malloc(stats.st_size);
-
-    if (!buf)
-    {
-        perror("malloc");
-        return false;
-    }
-
-    int fd = open(path, O_RDONLY);
-
-    if (fd < 0)
-    {
-        perror("open");
-        free(buf);
-
-        return false;
-    }
-
-    if (read(fd, buf, stats.st_size) < 0)
-    {
-        perror("read");
-        close(fd);
-        free(buf);
-
-        return false;
-    }
-
-    if (close(fd))
-    {
-        perror("close");
-        free(buf);
-
-        return false;
-    }
-
-    GBCartridge *cart = GBCartridgeCreate(buf, stats.st_size);
-    if (!cart) { return false; }
-
-    return GBGameboyInsertCartridge(state->gameboy, cart);
-}
-
-static void gameboy_keydown(struct state *state, int key) {
-    GBGamepadSetKeyState(state->gameboy->gamepad, key, true);
-}
-
-static void gameboy_keyup(struct state *state, int key) {
-    GBGamepadSetKeyState(state->gameboy->gamepad, key, false);
-}
-
-// The Mac OS X version of this app didn't have tick limited and woudl stall very badly.
-// We usually only hit the limit if something bad happens and starts logging too much,
-//   but I include this here as it's quite nice to not have the app lock up if it falls behind.
-static bool gameboy_tick(struct state *state, uint64_t ticks, uint64_t before)
-{
-    if (!GBGameboyIsPoweredOn(state->gameboy)) {
-        return true;
-    }
-
-    if (ticks > GB_CPS) {
-        fprintf(stderr, "Error: Too far behind! (need %llu ticks)\n", ticks);
-        return true;
-    }
-
-    for (uint64_t i = 0; i < ticks; i += 100)
-    {
-        for (uint64_t j = 0; j < min(ticks - i, 100); j++) {
-            GBClockTick(state->gameboy->clock);
-        }
-
-        if (SDL_GetTicksNS() > before)
-        {
-            LOG(WARN, "Warrning: Too far behind! (%llu/%llu)", i, ticks);
-            break;
-        }
-    }
-
-    return true;
 }
 
 // We can return SDL_APP_SUCCESS, SDL_APP_CONTINUE, or SDL_APP_FAILURE here.
@@ -198,69 +177,251 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv)
         return SDL_APP_FAILURE;
     }
 
-    SDL_WindowFlags windowFlags = 0;
-
-    if (!SDL_CreateWindowAndRenderer(WINDOW_NAME, WINDOW_WIDTH, WINDOW_HEIGHT, windowFlags, &state->window, &state->renderer))
-    {
-        report_error("Initialization Failed", "Failed to create window and renderer.");
-        return SDL_APP_FAILURE;
-    }
-
     SDL_SetHintWithPriority(SDL_HINT_WINDOWS_RAW_KEYBOARD, "1", SDL_HINT_OVERRIDE);
 
-    if (!(state->texture = SDL_CreateTexture(state->renderer, SDL_PIXELFORMAT_ARGB32, SDL_TEXTUREACCESS_STREAMING, kGBScreenWidth, kGBScreenHeight)))
-    {
-        report_error("Initialization Failed", "Failed to setup rendering texture");
-        return SDL_APP_FAILURE;
-    }
+    #define mkwindow(prop, w, flags)                                                \
+        do {                                                                        \
+            const char *name = w ## _WINDOW_NAME;                                   \
+            unsigned int width = w ## _WINDOW_WIDTH;                                \
+            unsigned int height = w ## _WINDOW_HEIGHT;                              \
+            double ratio = w ## _WINDOW_RATIO;                                      \
+                                                                                    \
+            if (!create_window(&state->prop, name, width, height, ratio, flags)) {  \
+                return SDL_APP_FAILURE;                                             \
+            }                                                                       \
+        } while (0)
+
+    mkwindow(screen, MAIN, 0);
+    mkwindow(bg, BG, SDL_WINDOW_HIDDEN);
+    mkwindow(tiles, TILE, SDL_WINDOW_HIDDEN);
+    mkwindow(oam, OAM, SDL_WINDOW_HIDDEN);
+    mkwindow(debug, DEBUG, SDL_WINDOW_HIDDEN);
+    #undef mkwindow
 
     state->sec = SDL_GetTicksNS();
     state->ticks = SDL_GetTicksNS();
     state->frame = 0;
+    state->clocks = 0;
 
-    return gameboy_init(state) ? SDL_APP_CONTINUE : SDL_APP_FAILURE;
+    state->showing_dialog = false;
+
+    state->debug_fps[0] = '\0';
+    state->debug_cps[0] = '\0';
+    state->show_debug = false;
+
+    state->gameboy = gameboy_init();
+    state->clk_mult = 1.0F;
+    state->paused = false;
+
+    if (!state->gameboy)
+    {
+        return SDL_APP_FAILURE;
+    }
+
+    return SDL_APP_CONTINUE;
 }
 
-static bool draw_frame(struct state *state)
+#define RENDER_TEXTURED(state, window, bpr, kind, render, ext)                              \
+    do {                                                                                    \
+        if (!SDL_RenderClear((window)->renderer))                                           \
+        {                                                                                   \
+            report_error("Graphics Error", "Failed to clear renderer");                     \
+            return false;                                                                   \
+        }                                                                                   \
+                                                                                            \
+        if (!SDL_LockTexture((window)->texture, NULL, &pixels, &pitch))                     \
+        {                                                                                   \
+            report_error("Graphics Error", "Failed to lock texture");                       \
+            return false;                                                                   \
+        }                                                                                   \
+                                                                                            \
+        if (pitch < bpr)                                                                    \
+        {                                                                                   \
+            LOG(ERROR, kind " texture pitch is invalid! (have %u, need %lu)", pitch, bpr);  \
+            return false;                                                                   \
+        }                                                                                   \
+                                                                                            \
+        render                                                                              \
+                                                                                            \
+        SDL_UnlockTexture((window)->texture);                                               \
+                                                                                            \
+        if (!SDL_RenderTexture((window)->renderer, (window)->texture, NULL, NULL))          \
+        {                                                                                   \
+            report_error("Graphics Error", "Failed to render texture");                     \
+            return false;                                                                   \
+        }                                                                                   \
+                                                                                            \
+        ext                                                                                 \
+                                                                                            \
+        if (!SDL_RenderPresent((window)->renderer))                                         \
+        {                                                                                   \
+            report_error("Graphics Error", "Failed to present renderer");                   \
+            return false;                                                                   \
+        }                                                                                   \
+    } while (0)
+
+static bool render_screen(struct state *state)
 {
-    uint32_t *screen_data = state->gameboy->driver->screenData;
+    uint32_t *screen_data = gameboy_screendata(state->gameboy);
 
     void *pixels;
     int pitch;
 
-    if (!SDL_RenderClear(state->renderer))
+    RENDER_TEXTURED(state, &state->screen, MAIN_BYTES_PER_ROW, "Screen", {
+        for (int r = 0; r < kGBScreenHeight; r++)
+        {
+            uint32_t *row = (uint32_t *)(pixels + (pitch * r));
+            memcpy(row, &screen_data[kGBScreenWidth * r], MAIN_BYTES_PER_ROW);
+        }
+    }, {
+        if (state->show_debug)
+        {
+            SDL_SetRenderDrawColor(state->screen.renderer, 255, 0, 0, 128);
+            SDL_RenderDebugText(state->screen.renderer, 8, 8, state->debug_fps);
+            SDL_RenderDebugText(state->screen.renderer, 8, 20, state->debug_cps);
+            SDL_SetRenderDrawColor(state->screen.renderer, 0, 0, 0, 255);
+        }
+    });
+
+    return true;
+}
+
+static bool render_background(struct state *state)
+{
+    void *pixels;
+    int pitch;
+
+    RENDER_TEXTURED(state, &state->bg, BG_BYTES_PER_ROW, "Background", {
+        int half = (kGBBackgroundHeight * pitch);
+
+        for (int i = 0; i < pitch / sizeof(uint32_t); i++) {
+            ((uint32_t *)(pixels + half))[i] = 0xFF00FFFF;
+        }
+
+        half += pitch;
+
+        gameboy_decode_background_data(state->gameboy, false, state->tileset, &pixels[   0], pitch);
+        gameboy_decode_background_data(state->gameboy, true,  state->tileset, &pixels[half], pitch);
+    }, {});
+
+    return true;
+}
+
+static bool render_tileset(struct state *state)
+{
+    void *pixels;
+    int pitch;
+
+    RENDER_TEXTURED(state, &state->tiles, TILE_BYTES_PER_ROW, "Tileset", {
+        gameboy_copy_tileset(state->gameboy, state->tileset, pixels, pitch);
+    }, {});
+
+    return true;
+}
+
+static bool render_sprites(struct state *state)
+{
+    void *pixels;
+    int pitch;
+
+    RENDER_TEXTURED(state, &state->oam, OAM_BYTES_PER_ROW, "Sprites", {
+        gameboy_decode_sprite_data(state->gameboy, pixels, pitch);
+    }, {});
+
+    return true;
+}
+
+const char *gameboy_mode(GBGameboy *gameboy)
+{
+    switch (gameboy->cpu->state.mode)
+    {
+        case kGBProcessorModeHalted:  return "Halted";
+        case kGBProcessorModeStopped: return "Stopped";
+        case kGBProcessorModeOff:     return "Off";
+        case kGBProcessorModeFetch:   return "Fetch";
+        case kGBProcessorModePrefix:  return "PreFetch";
+        case kGBProcessorModeStalled: return "Stalled";
+        case kGBProcessorModeRun:     return "Running";
+        case kGBProcessorModeWait1:   return "Wait 1";
+        case kGBProcessorModeWait2:   return "Wait 2";
+        case kGBProcessorModeWait3:   return "Wait 3";
+        case kGBProcessorModeWait4:   return "Wait 4";
+    }
+
+    return "[???]";
+}
+
+// The debug screen is all text, which is all 8x8
+static bool render_debug(struct state *state)
+{
+    struct window_state *window = &state->debug;
+
+    if (!SDL_RenderClear(window->renderer))
     {
         report_error("Graphics Error", "Failed to clear renderer");
         return false;
     }
 
-    if (!SDL_LockTexture(state->texture, NULL, &pixels, &pitch))
-    {
-        report_error("Graphics Error", "Failed to lock texture");
-        return false;
-    }
+    // Row and column to pixel indexing. The font is 8x8 and I used 4 pixels between lines.
+    #define row(n) ((n * 12) + 4)
+    #define col(n) ((n * 8) + 8)
 
-    if (pitch < BYTES_PER_ROW)
-    {
-        LOG(ERROR, "Texture pitch is invalid! (have %u)", pitch);
-        return false;
-    }
+    struct __GBProcessorState *cpustate = &state->gameboy->cpu->state;
+    GBInterruptController *ic = state->gameboy->cpu->ic;
 
-    for (int r = 0; r < kGBScreenHeight; r++)
-    {
-        uint32_t *row = (uint32_t *)(pixels + (pitch * r));
-        memcpy(row, &screen_data[kGBScreenWidth * r], BYTES_PER_ROW);
-    }
+    #define renderf(r, c, fmt, ...)                                     \
+        do {                                                            \
+            char buf[27];                                               \
+                                                                        \
+            snprintf(buf, 27, fmt __VA_OPT__(,) __VA_ARGS__);           \
+            SDL_RenderDebugText(window->renderer, col(c), row(r), buf); \
+        } while (0)
 
-    SDL_UnlockTexture(state->texture);
+    SDL_SetRenderDrawColor(window->renderer, 255, 255, 255, 255);
+    renderf(0, 0, "MODE: %s", gameboy_mode(state->gameboy));
 
-    if (!SDL_RenderTexture(state->renderer, state->texture, NULL, NULL))
-    {
-        report_error("Graphics Error", "Failed to render texture");
-        return false;
-    }
+    renderf(1, 0, "A: 0x%02X", cpustate->a);
+    renderf(1, 10, "PC: 0x%04X", cpustate->pc);
+    renderf(1, 23, "IE: %d", ic->interruptControl);
 
-    if (!SDL_RenderPresent(state->renderer))
+    renderf(2, 0, "B: 0x%02X", cpustate->b);
+    renderf(2, 10, "SP: 0x%04X", cpustate->sp);
+    renderf(2, 23, "IF: %d", ic->interruptFlagPort->value);
+
+    renderf(3, 0, "C: 0x%02X", cpustate->c);
+
+    renderf(4, 0, "D: 0x%02X", cpustate->d);
+    renderf(4, 9, "MAR: 0x%04X", cpustate->mar);
+    renderf(4, 22, "IME: %d", cpustate->ime);
+
+    renderf(5, 0, "E: 0x%02X", cpustate->e);
+    renderf(5, 9, "MDR: 0x%04X", cpustate->mdr);
+    renderf(5, 22, "ACC: %d", cpustate->accessed);
+
+    renderf(6, 0, "H: 0x%02X", cpustate->h);
+
+    renderf(7, 0, "L: 0x%02X", cpustate->l);
+    renderf(7, 10, "OP:   0x%02X", cpustate->op);
+    renderf(7, 22, "PRE: %d", cpustate->prefix);
+
+    renderf(8, 4,  "Z: %d", cpustate->f.z);
+    renderf(8, 9,  "N: %d", cpustate->f.n);
+    renderf(8, 14, "H: %d", cpustate->f.h);
+    renderf(8, 19, "C: %d", cpustate->f.c);
+
+    char ibuf[32];
+    gameboy_current_insn(state->gameboy, ibuf);
+    renderf(9, 0, "ASM: %s", ibuf);
+    renderf(10, 0, "MULT: %.20f", state->clk_mult);
+    renderf(11, 0, "TICK: %020llu", state->gameboy->clock->internalTick);
+
+    SDL_SetRenderDrawColor(window->renderer, 0, 0, 0, 255);
+
+    #undef renderf
+    #undef col
+    #undef row
+
+    if (!SDL_RenderPresent(window->renderer))
     {
         report_error("Graphics Error", "Failed to present renderer");
         return false;
@@ -277,17 +438,46 @@ SDL_AppResult SDL_AppIterate(void *appstate)
     uint64_t now = SDL_GetTicksNS();
     uint64_t delta = now - state->ticks;
 
-    if (!gameboy_tick(state, (delta * GB_CPS) / SEC_THRESHOLD, now + REFRESH_NS)) {
+    if (!state->paused)
+    {
+        if (!gameboy_tick(state->gameboy, (delta * state->clk_mult * GB_CPS) / SEC_THRESHOLD, now + REFRESH_NS)) {
+            return SDL_APP_FAILURE;
+        }
+    }
+
+    if (!render_screen(state)) {
         return SDL_APP_FAILURE;
     }
 
-    if (!draw_frame(state)) {
+    if (true)
+    {
+        gameboy_decode_tileset_data(state->gameboy, state->tileset);
+
+        if (!render_background(state)) {
+            return SDL_APP_FAILURE;
+        }
+
+        if (!render_tileset(state)) {
+            return SDL_APP_FAILURE;
+        }
+
+        if (!render_sprites(state)) {
+            return SDL_APP_FAILURE;
+        }
+    }
+
+    if (!render_debug(state)) {
         return SDL_APP_FAILURE;
     }
 
     if (now - state->sec > SEC_THRESHOLD) {
         state->sec = now;
-        printf("FPS: %llu\n", state->frame);
+
+        uint64_t cps = state->gameboy->clock->internalTick - state->clocks;
+        snprintf(state->debug_fps, 8, "FPS: %llu", state->frame);
+        snprintf(state->debug_cps, 12, "CPS: %llu", cps);
+
+        state->clocks = state->gameboy->clock->internalTick;
         state->frame = 0;
     } else {
         state->frame++;
@@ -313,34 +503,28 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     switch (event->type)
     {
         case SDL_EVENT_QUIT: return SDL_APP_SUCCESS;
+
         case SDL_EVENT_DROP_FILE: {
             SDL_DropEvent *drop = &event->drop;
 
             if (drop->data) {
-                if (!gameboy_load_file(state, drop->data)) {
-                    return SDL_APP_CONTINUE;
-                }
-
-                LOG(INFO, "Inserted '%s'\n", drop->data);
-                GBGameboyPowerOn(state->gameboy);
+                handle_file(state, drop->data);
             }
         } return SDL_APP_CONTINUE;
-        case SDL_EVENT_WINDOW_MOUSE_ENTER:
-        case SDL_EVENT_WINDOW_MOUSE_LEAVE:
-        case SDL_EVENT_MOUSE_MOTION:
-            return SDL_APP_CONTINUE;
 
         case SDL_EVENT_KEY_DOWN: {
             switch (event->key.scancode)
             {
-                case SDL_SCANCODE_RETURN: gameboy_keydown(state, kGBGamepadStart);  break;
-                case SDL_SCANCODE_RSHIFT: gameboy_keydown(state, kGBGamepadSelect); break;
-                case SDL_SCANCODE_P:      gameboy_keydown(state, kGBGamepadA);      break;
-                case SDL_SCANCODE_L:      gameboy_keydown(state, kGBGamepadB);      break;
-                case SDL_SCANCODE_W:      gameboy_keydown(state, kGBGamepadUp);     break;
-                case SDL_SCANCODE_A:      gameboy_keydown(state, kGBGamepadLeft);   break;
-                case SDL_SCANCODE_S:      gameboy_keydown(state, kGBGamepadDown);   break;
-                case SDL_SCANCODE_D:      gameboy_keydown(state, kGBGamepadRight);  break;
+                case SDL_SCANCODE_RETURN:   gameboy_keydown(state->gameboy, kGBGamepadStart);   break;
+                case SDL_SCANCODE_RSHIFT:   gameboy_keydown(state->gameboy, kGBGamepadSelect);  break;
+                case SDL_SCANCODE_P:        gameboy_keydown(state->gameboy, kGBGamepadA);       break;
+                case SDL_SCANCODE_L:        gameboy_keydown(state->gameboy, kGBGamepadB);       break;
+                case SDL_SCANCODE_W:        gameboy_keydown(state->gameboy, kGBGamepadUp);      break;
+                case SDL_SCANCODE_A:        gameboy_keydown(state->gameboy, kGBGamepadLeft);    break;
+                case SDL_SCANCODE_S:        gameboy_keydown(state->gameboy, kGBGamepadDown);    break;
+                case SDL_SCANCODE_D:        gameboy_keydown(state->gameboy, kGBGamepadRight);   break;
+                case SDL_SCANCODE_EQUALS:   state->clk_mult *= 2.0;                             break;
+                case SDL_SCANCODE_MINUS:    state->clk_mult *= 0.5;                             break;
                 default: break;
             }
         } return SDL_APP_CONTINUE;
@@ -348,17 +532,39 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
         case SDL_EVENT_KEY_UP: {
             switch (event->key.scancode)
             {
-                case SDL_SCANCODE_RETURN: gameboy_keyup(state, kGBGamepadStart);  break;
-                case SDL_SCANCODE_RSHIFT: gameboy_keyup(state, kGBGamepadSelect); break;
-                case SDL_SCANCODE_P:      gameboy_keyup(state, kGBGamepadA);      break;
-                case SDL_SCANCODE_L:      gameboy_keyup(state, kGBGamepadB);      break;
-                case SDL_SCANCODE_W:      gameboy_keyup(state, kGBGamepadUp);     break;
-                case SDL_SCANCODE_A:      gameboy_keyup(state, kGBGamepadLeft);   break;
-                case SDL_SCANCODE_S:      gameboy_keyup(state, kGBGamepadDown);   break;
-                case SDL_SCANCODE_D:      gameboy_keyup(state, kGBGamepadRight);  break;
+                case SDL_SCANCODE_RETURN: gameboy_keyup(state->gameboy, kGBGamepadStart);  break;
+                case SDL_SCANCODE_RSHIFT: gameboy_keyup(state->gameboy, kGBGamepadSelect); break;
+                case SDL_SCANCODE_P:      gameboy_keyup(state->gameboy, kGBGamepadA);      break;
+                case SDL_SCANCODE_L:      gameboy_keyup(state->gameboy, kGBGamepadB);      break;
+                case SDL_SCANCODE_W:      gameboy_keyup(state->gameboy, kGBGamepadUp);     break;
+                case SDL_SCANCODE_A:      gameboy_keyup(state->gameboy, kGBGamepadLeft);   break;
+                case SDL_SCANCODE_S:      gameboy_keyup(state->gameboy, kGBGamepadDown);   break;
+                case SDL_SCANCODE_D:      gameboy_keyup(state->gameboy, kGBGamepadRight);  break;
+                case SDL_SCANCODE_F: {
+                    state->show_debug = !state->show_debug;
+                    LOG(DEBUG, "Debug %s", state->show_debug ? "enabled" : "disabled");
+                } break;
+                case SDL_SCANCODE_O: {
+                    SDL_ShowOpenFileDialog(open_file_callback, state, NULL, NULL, 0, NULL, false);
+                    state->showing_dialog = true;
+                } break;
+                case SDL_SCANCODE_0:        toggle_window(state, &state->screen);               break;
+                case SDL_SCANCODE_1:        toggle_window(state, &state->debug);                break;
+                case SDL_SCANCODE_2:        toggle_window(state, &state->tiles);                break;
+                case SDL_SCANCODE_3:        toggle_window(state, &state->bg);                   break;
+                case SDL_SCANCODE_4:        toggle_window(state, &state->oam);                  break;
+                case SDL_SCANCODE_Z:        state->paused = !state->paused;                     break;
+                case SDL_SCANCODE_E:        gameboy_eject(state->gameboy);                      break;
+                case SDL_SCANCODE_R:        gameboy_reset(state->gameboy);                      break;
+                case SDL_SCANCODE_T:        gameboy_tick_once(state->gameboy);                  break;
                 default: break;
             }
         } return SDL_APP_CONTINUE;
+
+        case SDL_EVENT_WINDOW_MOUSE_ENTER:
+        case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+        case SDL_EVENT_MOUSE_MOTION:
+            return SDL_APP_CONTINUE;
 
         default:
             LOG(DEBUG, "Received event of unknown type '0x%X'", event->type);

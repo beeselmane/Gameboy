@@ -22,4 +22,6 @@ GBDisassemblyInfo **GBDisassemblerProcess(uint8_t *code, uint32_t length, uint32
 
 GBDisassemblyInfo *GBDisassembleSingle(uint8_t *code, uint32_t length, uint32_t *used);
 
+void GBDisassembleSingleTo(uint8_t *code, uint32_t length, char *to, uint64_t size);
+
 #endif /* !defined(__LIBGB_DISASM__) */

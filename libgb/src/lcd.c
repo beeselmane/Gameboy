@@ -600,7 +600,11 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, uint64_t ticks)
                                 //if (nextSprite->x == this->linePosition && this->coordinate->value == nextSprite->y)
                                 //    printf("Next sprite at (%d, %d)\n", nextSprite->x, nextSprite->y);
 
-                                this->linePointer[this->linePosition++] = 0xFF000000;
+                                if (this->control->value & 2) {
+                                    this->linePointer[this->linePosition++] = 0xFF000000;
+                                } else {
+                                    this->linePosition++;
+                                }
                             } else {
                                 this->linePointer[this->linePosition++] = nextPixelRGB;
                             }

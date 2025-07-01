@@ -8,4 +8,5 @@ make -C libgb
 
 mkdir -pv build
 cc ${CFLAGS} -o build/main.o -c sdl/main.c 
-cc ${LDFLAGS} -o build/sdlgb build/main.o libgb/build/libgb.a ~/opt/sdl3/lib/libSDL3.a
+cc ${CFLAGS} -o build/gameboy.o -c sdl/gameboy.c 
+cc ${LDFLAGS} -o build/sdlgb build/main.o build/gameboy.o libgb/build/libgb.a ~/opt/sdl3/lib/libSDL3.a

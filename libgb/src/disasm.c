@@ -199,3 +199,49 @@ GBDisassemblyInfo *GBDisassembleSingle(uint8_t *code, uint32_t length, uint32_t 
 
     return result;
 }
+
+void GBDisassembleSingleTo(uint8_t *code, uint32_t length, char *to, uint64_t size)
+{
+    if (length < 1) { return; }
+
+    const GBDisassemblerOP *op = NULL;
+    uint8_t opcode = code[0];
+
+    if (opcode == 0xCB)
+    {
+        if (length < 2)
+        {
+            strlcpy(to, "CB.??", size);
+            return;
+        }
+
+        op = gGBDisassemblerTableCB[code[1]];
+        opcode = code[1];
+
+        snprintf(to, size, "%s", op->format);
+        return;
+    }
+
+    op = gGBDisassemblerTable[opcode];
+
+    if (op->length > length)
+    {
+        strlcpy(to, op->format, size);
+        return;
+    }
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-security"
+    switch (op->length)
+    {
+        case 1: strlcpy(to, op->format, size); break;
+        case 2: snprintf(to, size, op->format, code[1]); break;
+        case 3: {
+            uint16_t argument = code[1];
+            argument |= ((uint16_t)(code[2])) << 8;
+
+            snprintf(to, size, op->format, argument);
+        } break;
+    }
+#pragma clang diagnostic pop
+}
