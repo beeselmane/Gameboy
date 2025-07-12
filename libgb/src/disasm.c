@@ -72,6 +72,7 @@ GBDisassemblyInfo **GBDisassemblerProcess(uint8_t *code, uint32_t length, uint32
         output[read] = malloc(sizeof(GBDisassemblyInfo));
         if (!output[read]) break;
 
+        output[read]->op = (GBDisassemblerOP *)op;
         output[read]->instruction = op->opcode;
         output[read]->offset = (i - 1);
 

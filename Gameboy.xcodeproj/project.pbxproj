@@ -17,22 +17,8 @@
 		8B3E99F721F5667B00FA2526 /* libEmulator.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 8B3E99E121F533C100FA2526 /* libEmulator.dylib */; };
 		8B44BAD622141881001D4318 /* GBAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B44BAD322141881001D4318 /* GBAppDelegate.m */; };
 		8B4C28D422060F09005FE36A /* lcd.c in Sources */ = {isa = PBXBuildFile; fileRef = 8B4C28D222060EFD005FE36A /* lcd.c */; };
-		8B4C28D622064014005FE36A /* tetris.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B4C28D522064014005FE36A /* tetris.gb */; };
 		8B6C5C0E222680C800CABFBB /* GBFragment.glsl in Resources */ = {isa = PBXBuildFile; fileRef = 8B6C5C0D222680C800CABFBB /* GBFragment.glsl */; };
 		8B6C5C10222680D200CABFBB /* GBVertex.glsl in Resources */ = {isa = PBXBuildFile; fileRef = 8B6C5C0F222680D200CABFBB /* GBVertex.glsl */; };
-		8B86B8A7220CB3C60097AF73 /* 02-interrupts.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B86B89D220CB38F0097AF73 /* 02-interrupts.gb */; };
-		8B86B8A8220CB3C60097AF73 /* 04-op r,imm.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B86B89E220CB38F0097AF73 /* 04-op r,imm.gb */; };
-		8B86B8A9220CB3C60097AF73 /* 07-jr,jp,call,ret,rst.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B86B89F220CB38F0097AF73 /* 07-jr,jp,call,ret,rst.gb */; };
-		8B86B8AA220CB3C60097AF73 /* 08-misc instrs.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B86B8A1220CB38F0097AF73 /* 08-misc instrs.gb */; };
-		8B86B8AB220CB3C60097AF73 /* 11-op a,(hl).gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B86B8A0220CB38F0097AF73 /* 11-op a,(hl).gb */; };
-		8B86B8AC220CB3C60097AF73 /* 01-special.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B97627B220CB37B0059F606 /* 01-special.gb */; };
-		8B86B8AD220CB3C60097AF73 /* 03-op sp,hl.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B976279220CB37B0059F606 /* 03-op sp,hl.gb */; };
-		8B86B8AE220CB3C60097AF73 /* 05-op rp.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B976278220CB37B0059F606 /* 05-op rp.gb */; };
-		8B86B8AF220CB3C60097AF73 /* 06-ld r,r.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B97627A220CB37B0059F606 /* 06-ld r,r.gb */; };
-		8B86B8B0220CB3C60097AF73 /* 09-op r,r.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B97627D220CB37B0059F606 /* 09-op r,r.gb */; };
-		8B86B8B1220CB3C60097AF73 /* 10-bit ops.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B97627C220CB37B0059F606 /* 10-bit ops.gb */; };
-		8B86B8B3220CBA280097AF73 /* opus5.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B86B8B2220CBA280097AF73 /* opus5.gb */; };
-		8B976277220CB09A0059F606 /* drm.gb in Resources */ = {isa = PBXBuildFile; fileRef = 8B976275220CB09A0059F606 /* drm.gb */; };
 		8BA00B232203F584009CE00B /* ic.c in Sources */ = {isa = PBXBuildFile; fileRef = 8BA00B222203F584009CE00B /* ic.c */; };
 		8BB4DBEB22602A9400008FD6 /* GBGameboyInstance.m in Sources */ = {isa = PBXBuildFile; fileRef = 8BB4DBEA22602A9400008FD6 /* GBGameboyInstance.m */; };
 		8BB4DBF322602B4E00008FD6 /* GBStateWindow.m in Sources */ = {isa = PBXBuildFile; fileRef = 8BB4DBF122602B4E00008FD6 /* GBStateWindow.m */; };
@@ -410,29 +396,15 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				8B976277220CB09A0059F606 /* drm.gb in Resources */,
-				8B4C28D622064014005FE36A /* tetris.gb in Resources */,
 				8B3E99C821F26BE700FA2526 /* Assets.xcassets in Resources */,
 				8BDE5B1D22685ACB005535B8 /* GBPaletteWindow.xib in Resources */,
 				8BDE5B1A22685AC5005535B8 /* GBScreen.xib in Resources */,
 				8B3E99CB21F26BE800FA2526 /* MainMenu.xib in Resources */,
 				8BDE5B2022685ACE005535B8 /* GBBackgroundWindow.xib in Resources */,
 				8B6C5C0E222680C800CABFBB /* GBFragment.glsl in Resources */,
-				8B86B8A7220CB3C60097AF73 /* 02-interrupts.gb in Resources */,
-				8B86B8A8220CB3C60097AF73 /* 04-op r,imm.gb in Resources */,
-				8B86B8A9220CB3C60097AF73 /* 07-jr,jp,call,ret,rst.gb in Resources */,
-				8B86B8AA220CB3C60097AF73 /* 08-misc instrs.gb in Resources */,
-				8B86B8AB220CB3C60097AF73 /* 11-op a,(hl).gb in Resources */,
-				8B86B8AC220CB3C60097AF73 /* 01-special.gb in Resources */,
-				8B86B8AD220CB3C60097AF73 /* 03-op sp,hl.gb in Resources */,
 				8B6C5C10222680D200CABFBB /* GBVertex.glsl in Resources */,
-				8B86B8B3220CBA280097AF73 /* opus5.gb in Resources */,
-				8B86B8AE220CB3C60097AF73 /* 05-op rp.gb in Resources */,
 				8BE87CFF22A9678300DBD74C /* GBControllerWindow.xib in Resources */,
 				8BDE5B1722685AB3005535B8 /* GBStateWindow.xib in Resources */,
-				8B86B8AF220CB3C60097AF73 /* 06-ld r,r.gb in Resources */,
-				8B86B8B0220CB3C60097AF73 /* 09-op r,r.gb in Resources */,
-				8B86B8B1220CB3C60097AF73 /* 10-bit ops.gb in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

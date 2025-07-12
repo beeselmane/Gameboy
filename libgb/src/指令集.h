@@ -1242,7 +1242,6 @@ op_wait3_stall(0xE8, 1, "add sp, " d8, {
     __ALUAdd16(cpu, &cpu->state.sp, __ALUSignExtend(cpu->state.mdr), 0);
 }, {
     __GBProcessorRead(cpu, 0x0000);
-
     cpu->state.f.z = 0;
 }, {
     // Stalling more...
@@ -1322,7 +1321,19 @@ op_wait2_stall(0xF8, 2, "ld hl, " d8 "(sp)", {
 }, {
     uint16_t sp = cpu->state.sp;
 
-    __ALUAdd16(cpu, &cpu->state.sp, __ALUSignExtend(cpu->state.mdr), 0);
+    uint16_t val = __ALUSignExtend(cpu->state.mdr);
+
+    __ALUAdd8(cpu, (uint8_t *)&cpu->state.hl, val & 0xFF, 0);
+    uint8_t h = cpu->state.f.h;
+    uint8_t c = cpu->state.f.c;
+
+    __ALUAdd8(cpu, ((uint8_t *)&cpu->state.hl) + 1, val >> 8, cpu->state.f.c);
+    cpu->state.f.h = h;
+    cpu->state.f.c = c;
+
+    //__ALUAdd8(cpu, (uint8_t *)(to) + 0, from & 0xFF, carry);
+    //__ALUAdd8(cpu, (uint8_t *)(to) + 1, from >> 8, cpu->state.f.c);
+    //__ALUAdd16(cpu, &cpu->state.sp, __ALUSignExtend(cpu->state.mdr), 0);
 
     cpu->state.hl = cpu->state.sp;
     cpu->state.sp = sp;

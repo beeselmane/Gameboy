@@ -14,6 +14,23 @@
 #define LOG(level,  msg, ...) SDL_LogMessage(SDL_LOG_CATEGORY_APPLICATION, SDL_LOG_PRIORITY_ ## level, msg __VA_OPT__(,) __VA_ARGS__)
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
+// Breakpoint info
+struct brk_info {
+    // Breakpoint at address
+    uint16_t addr;
+
+    // Breakpoint on opcode
+    uint16_t op;
+
+    // Is breakpoint active?
+    bool addr_active;
+    bool op_active;
+
+    // Was a breakpoint triggered?
+    bool trigger_addr;
+    bool trigger_op;
+};
+
 // Init new gameboy
 extern GBGameboy *gameboy_init(void);
 
@@ -46,11 +63,15 @@ extern void gameboy_keyup(GBGameboy *gameboy, int key);
 
 // Console clock ticking
 
-extern bool gameboy_tick(GBGameboy *gameboy, uint64_t ticks, uint64_t deadline);
+extern int64_t gameboy_tick(GBGameboy *gameboy, uint32_t ticks, uint64_t deadline, struct brk_info *breakpoint);
+
+extern int gameboy_step_once(GBGameboy *gameboy);
 
 extern bool gameboy_tick_once(GBGameboy *gameboy);
 
 // CPU debugging
+
+extern uint16_t gameboy_op(GBGameboy *gameboy);
 
 extern void gameboy_current_insn(GBGameboy *gameboy, char buf[32]);
 

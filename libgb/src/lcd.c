@@ -77,7 +77,7 @@ bool __GBVideoRAMOnInstall(GBVideoRAM *this, GBGameboy *gameboy)
     return GBMemoryManagerInstallSpace(gameboy->cpu->mmu, (GBMemorySpace *)this);
 }
 
-#pragma - Sprite RAM
+#pragma mark - Sprite RAM
 
 GBSpriteRAM *GBSpriteRAMCreate(void)
 {
@@ -596,7 +596,7 @@ void __GBGraphicsDriverTick(GBGraphicsDriver *this, uint64_t ticks)
                             uint8_t spriteRightX = nextSprite->x;
                             uint8_t spriteLeftX = nextSprite->x - 8;
 
-                            if (spriteLeftX <= position) {
+                            if (spriteLeftX <= position && false) {
                                 //if (nextSprite->x == this->linePosition && this->coordinate->value == nextSprite->y)
                                 //    printf("Next sprite at (%d, %d)\n", nextSprite->x, nextSprite->y);
 

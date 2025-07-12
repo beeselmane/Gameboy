@@ -1,4 +1,4 @@
-CFLAGS := -O2 -flto -Wall -Wextra -I.
+CFLAGS := -O2 -flto -Wall -Wextra -I. -Wno-unused-command-line-argument -Wno-unused-parameter
 LIBTOOL ?= libtool
 CC ?= cc
 

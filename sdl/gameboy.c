@@ -25,7 +25,26 @@ __attribute__((section("__TEXT,__rom"))) uint8_t gGBDMGEditedROM[0x100] = {
     0xF5, 0x06, 0x19, 0x78, 0x86, 0x23, 0x05, 0x20, 0xFB, 0x86, 0x00, 0x00, 0x3E, 0x01, 0xE0, 0x50
 };
 
-#define _read(gb, addr) __GBMemoryManagerRead((gb)->cpu->mmu, (addr))
+#define _read(gb, addr)     __GBMemoryManagerRead((gb)->cpu->mmu, (addr))
+
+#define __cpu_mode(gb)      ((gb)->cpu->state.mode)
+#define __tick_once(gb)     (GBClockTick((gb)->clock))
+#define __clock_ticks(gb)   ((gb)->clock->internalTick)
+
+#define _pc(gb)             ((gb)->cpu->state.pc)
+
+#define _op(gb) ({                                  \
+    uint16_t cur = _read(gameboy, _pc(gameboy));    \
+                                                    \
+    /* Prefix instructions */                       \
+    if (cur == 0xCB)                                \
+    {                                               \
+        cur <<= 8;                                  \
+        cur |= _read(gameboy, _pc(gameboy) + 1);    \
+    }                                               \
+                                                    \
+    cur;                                            \
+})
 
 GBGameboy *gameboy_init(void)
 {
@@ -52,16 +71,11 @@ GBGameboy *gameboy_init(void)
 
 void gameboy_reset(GBGameboy *gameboy)
 {
-    gameboy->cpu->state.mode = kGBProcessorModeFetch;
-    gameboy->cpu->state.pc = 0;
 }
 
-bool gameboy_has_cart(GBGameboy *gameboy) {
-    return gameboy->cartInstalled;
-}
-
-bool gameboy_eject(GBGameboy *gameboy) {
-    return GBGameboyEjectCartridge(gameboy, gameboy->cart);
+bool gameboy_eject(GBGameboy *gameboy)
+{
+    return false;
 }
 
 bool gameboy_load_file(GBGameboy *gameboy, const char *path)
@@ -115,18 +129,6 @@ bool gameboy_load_file(GBGameboy *gameboy, const char *path)
     return GBGameboyInsertCartridge(gameboy, cart);
 }
 
-bool gameboy_is_on(GBGameboy *gameboy) {
-    return GBGameboyIsPoweredOn(gameboy);
-}
-
-void gameboy_power_on(GBGameboy *gameboy) {
-    GBGameboyPowerOn(gameboy);
-}
-
-void gameboy_power_off(GBGameboy *gameboy) {
-    GBGameboyPowerOff(gameboy);
-}
-
 void gameboy_keydown(GBGameboy *gameboy, int key) {
     GBGamepadSetKeyState(gameboy->gamepad, key, true);
 }
@@ -138,38 +140,95 @@ void gameboy_keyup(GBGameboy *gameboy, int key) {
 // The Mac OS X version of this app didn't have tick limited and woudl stall very badly.
 // We usually only hit the limit if something bad happens and starts logging too much,
 //   but I include this here as it's quite nice to not have the app lock up if it falls behind.
-bool gameboy_tick(GBGameboy *gameboy, uint64_t ticks, uint64_t deadline)
+int64_t gameboy_tick(GBGameboy *gameboy, uint32_t ticks, uint64_t deadline, struct brk_info *breakpoint)
+{
+    if (!GBGameboyIsPoweredOn(gameboy)) {
+        return 0;
+    }
+
+    // TODO: This ought to happen in the render loop.
+    if (ticks > GB_CPS) {
+        fprintf(stderr, "Error: Too far behind! (need %u ticks)\n", ticks);
+        return 0;
+    }
+
+    if (breakpoint->trigger_addr || breakpoint->trigger_op) {
+        return 0;
+    }
+
+    // Account ticks here.
+    uint64_t res = 0;
+
+    // We may go slightly over, but never more than 12 ticks.
+    while (res < ticks)
+    {
+        uint32_t i = 0;
+
+        while (i < MIN(ticks - i, 100))
+        {
+            if (breakpoint->addr_active)
+            {
+                if (gameboy->cpu->state.pc == breakpoint->addr)
+                {
+                    breakpoint->trigger_addr = true;
+                    return (res + i);
+                }
+            }
+
+            if (breakpoint->op_active)
+            {
+                if (breakpoint->op == _op(gameboy))
+                {
+                    breakpoint->trigger_op = true;
+                    return (res + i);
+                }
+            }
+
+            i += gameboy_step_once(gameboy);
+        }
+
+        // Account how many ticks we've just done.
+        res += i;
+
+        if (SDL_GetTicksNS() > deadline)
+        {
+            LOG(WARN, "Too far behind! (%llu/%u)", res, ticks);
+            break;
+        }
+    }
+
+    return res;
+}
+
+// Execute a single full instruction.
+// Return number of clockt icks, or negative on failure.
+int gameboy_step_once(GBGameboy *gameboy)
+{
+    uint64_t starting_tick = __clock_ticks(gameboy);
+
+    if (__cpu_mode(gameboy) == kGBProcessorModeFetch) {
+        __tick_once(gameboy);
+    }
+
+    while (__cpu_mode(gameboy) != kGBProcessorModeFetch) {
+        __tick_once(gameboy);
+    }
+
+    return (__clock_ticks(gameboy) - starting_tick);
+}
+
+bool gameboy_tick_once(GBGameboy *gameboy)
 {
     if (!GBGameboyIsPoweredOn(gameboy)) {
         return true;
     }
 
-    if (ticks > GB_CPS) {
-        fprintf(stderr, "Error: Too far behind! (need %llu ticks)\n", ticks);
-        return true;
-    }
-
-    for (uint64_t i = 0; i < ticks; i += 100)
-    {
-        for (uint64_t j = 0; j < MIN(ticks - i, 100); j++) {
-            GBClockTick(gameboy->clock);
-        }
-
-        if (SDL_GetTicksNS() > deadline)
-        {
-            LOG(WARN, "Warrning: Too far behind! (%llu/%llu)", i, ticks);
-            break;
-        }
-    }
-
+    __tick_once(gameboy);
     return true;
 }
 
-bool gameboy_tick_once(GBGameboy *gameboy)
-{
-    GBClockTick(gameboy->clock);
-    return true;
-}
+uint16_t gameboy_op(GBGameboy *gameboy)
+{ return _op(gameboy); }
 
 void gameboy_current_insn(GBGameboy *gameboy, char buf[32])
 {
@@ -181,7 +240,19 @@ void gameboy_current_insn(GBGameboy *gameboy, char buf[32])
         _read(gameboy, pc + 2)
     };
 
-    GBDisassembleSingleTo(insn, 3, buf, 32);
+    GBDisassemblyInfo *info = GBDisassembleSingle(insn, 3, NULL);
+
+    if (!info)
+    {
+        buf[0] = '?';
+        buf[1] = '\0';
+
+        return;
+    }
+
+    strlcpy(buf, info->string, 32);
+    free(info->string);
+    free(info);
 }
 
 int gameboy_cpu_mode(GBGameboy *gameboy);

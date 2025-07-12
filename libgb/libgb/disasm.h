@@ -11,6 +11,8 @@ typedef struct {
 } GBDisassemblerOP;
 
 typedef struct {
+    GBDisassemblerOP *op;
+
     uint8_t instruction;
     uint16_t argument;
     uint32_t offset;
