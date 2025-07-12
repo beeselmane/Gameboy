@@ -11,15 +11,6 @@
 
 #include "指令集.h"
 
-// We can only read memory on memory line ticks
-// --> This is 1/4 our tick rate
-
-// fetch, increment, decode, perform
-
-// fetch, increment, decode, data fetch (lags), increment, perform, data store (lags)
-
-// fetch, increment, decode, prefix (wait), fetch, increment, decode, perform
-
 GBProcessor *GBProcessorCreate(void)
 {
     GBProcessor *cpu = malloc(sizeof(GBProcessor));
