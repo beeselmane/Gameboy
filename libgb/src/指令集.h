@@ -2,15 +2,11 @@
 // To create a disassembler, just redefine the op macros such that the implementation is left empty
 // and you have an effective map of opcode --> string and length.
 // Then, disassembly is pretty easy, it's just a simple map
+#include <stdint.h>
 
 #ifndef kGBDisassembler
 
-#if __has_attribute(always_inline)
-    #define INLINE __attribute__((always_inline))
-#else /* !__has_attribute(always_inline) */
-    #define INLINE inline
-#endif /* __has_attribute(always_inline) */
-
+// Declare an opcode struct calling a function __GBProcessorDo_<op>
 #define declare(op, str)                                                                        \
     static void __GBProcessorDo_ ## op(GBProcessorOP *this, struct __GBProcessor *cpu);         \
                                                                                                 \
@@ -20,12 +16,15 @@
         .go = __GBProcessorDo_ ## op                                                            \
     }
 
+// Declare an opcode struct with the given implementation function.
+// This macro is overridden by the disassembler, which will use the `len` field for decoding.
 #define op(code, len, str, impl)                                                                \
     declare(code, str);                                                                         \
                                                                                                 \
     void __GBProcessorDo_ ## code(GBProcessorOP *this, struct __GBProcessor *cpu)               \
     impl
 
+// Similar to the above but for CB-prefixed instructions.
 #define op_pre(code, len, str, impl)                                                            \
     static void __GBProcessorDo_pre_ ## code(GBProcessorOP *this, struct __GBProcessor *cpu);   \
                                                                                                 \
@@ -38,142 +37,189 @@
     void __GBProcessorDo_pre_ ## code(GBProcessorOP *this, struct __GBProcessor *cpu)           \
     impl
 
+#pragma mark - State Macros
+
+#define _data           ((cpu)->state.data)
+#define _mar            ((cpu)->state.mar)
+#define _mdr            ((cpu)->state.mdr)
+#define _reg(r)         ((cpu)->state.r)
+#define _pc             ((cpu)->state.pc)
+#define _sp             ((cpu)->state.sp)
+#define _hl             ((cpu)->state.hl)
+#define _a              ((cpu)->state.a)
+#define _f              (cpu)->state.f
+
 #pragma mark - Memory Access
 
-static INLINE void __GBProcessorRead(GBProcessor *cpu, uint16_t address)
-{
-    cpu->state.accessed = false;
-    cpu->state.mar = address;
+// Request a read from the given address. The mdr register will be filled on the next memory bus tick.
+#define __mmu_read(cpu, addr)                                                                   \
+    do {                                                                                        \
+        (cpu)->state.accessed = false;                                                          \
+        _mar = (addr);                                                                          \
+                                                                                                \
+        GBMemoryManagerReadRequest((cpu)->mmu, &_mar, &_mdr, &(cpu)->state.accessed);           \
+    } while (0)
 
-    GBMemoryManagerReadRequest(cpu->mmu, &cpu->state.mar, &cpu->state.mdr, &cpu->state.accessed);
-}
+// Request a write to the given address. The data will be written on the next memory bus tick.
+#define __mmu_write(cpu, addr, data)                                                            \
+    do {                                                                                        \
+        (cpu)->state.accessed = false;                                                          \
+        _mar = (addr);                                                                          \
+        _mdr = (data);                                                                          \
+                                                                                                \
+        GBMemoryManagerWriteRequest((cpu)->mmu, &_mar, &_mdr, &(cpu)->state.accessed);          \
+    } while (0)
 
-static INLINE void __GBProcessorWrite(GBProcessor *cpu, uint16_t address, uint8_t data)
-{
-    cpu->state.accessed = false;
-    cpu->state.mar = address;
-    cpu->state.mdr = data;
-
-    GBMemoryManagerWriteRequest(cpu->mmu, &cpu->state.mar, &cpu->state.mdr, &cpu->state.accessed);
-}
-
-static INLINE void __GBProcessorReadArgument(GBProcessor *cpu)
-{
-    __GBProcessorRead(cpu, cpu->state.pc++);
-}
+// Request a read for an argument for the current instruction.
+#define __mmu_read_arg(cpu) { __mmu_read((cpu), _pc); _pc++; }
 
 #pragma mark - ALU
 
-static INLINE uint16_t __ALUComplement(uint8_t value)
-{
-    return (~value);
-}
+// Set all flags at once
+#define __set_flags(nz, nn, nh, nc)     \
+    do {                                \
+        _f.z = (nz) & 1;                \
+        _f.n = (nn) & 1;                \
+        _f.h = (nh) & 1;                \
+        _f.c = (nc) & 1;                \
+    } while (0)
 
-static INLINE uint16_t __ALUSignExtend(uint8_t value)
-{
-    if (value >> 7) {
-        return 0xFF00 | value;
-    } else {
-        return 0x0000 | value;
-    }
-}
+// Compute the 1's complement of the passed value.
+#define __alu_1_cmpl(a)     (~(a))
 
-// Note: Subtract just sets the n flag in f
-static INLINE void __ALUAdd8(GBProcessor *cpu, uint8_t *to, uint8_t from, uint8_t carry)
-{
-    // Perform two 4-bit adds (this is how the gameboy actually does this)
-    uint8_t lo = (from & 0xF) + ((*to) & 0xF) + carry;
-    cpu->state.f.h = lo >> 4;
+// Compute the 2's complement of the passed value.
+#define __alu_2_cmpl(a)     (~(a) + 1)
 
-    uint8_t hi = (from >> 4) + ((*to) >> 4) + cpu->state.f.h;
-    cpu->state.f.c = hi >> 4;
+// Sign extend the passed value from 8 to 16 bits
+#define __alu_extend(a)     ({ uint8_t v = (uint8_t)(a); (uint16_t)((v & 0x80) ? (0xFF00 | v) : v); })
 
-    (*to) = (hi << 4) | (lo & 0xF);
+// Add two 8 bit numbers, updating flags as necessary.
+#define __alu_add8(cpu, to, from, carry)                                            \
+    do {                                                                            \
+        /* Perform two 4-bit adds (this is how the gameboy actually does this) */   \
+        uint8_t lo = (((from) & 0xF) + ((to) & 0xF) + carry);                       \
+        _f.h = (lo >> 4) & 1;                                                       \
+                                                                                    \
+        uint8_t hi = (((from) >> 4) + ((to) >> 4) + cpu->state.f.h);                \
+        _f.c = (hi >> 4) & 1;                                                       \
+                                                                                    \
+        to = (hi << 4) | (lo & 0xF);                                                \
+        _f.z = !(to);                                                               \
+        _f.n = 0;                                                                   \
+    } while (0)
 
-    cpu->state.f.z = !(*to);
-    cpu->state.f.n = 0;
-}
+// Add a sign extended 8-bit value to a 16-bit base.
+// The h and c flags are set based on the lower addition.
+#define __alu_add16_8(cpu, to, from)                        \
+    do {                                                    \
+        uint16_t ext = __alu_extend(from);                  \
+        uint8_t _lo = (to) & 0xFF;                          \
+                                                            \
+        __alu_add8((cpu), _lo, ext & 0xFF, 0);              \
+        uint8_t h = _f.h;                                   \
+        uint8_t c = _f.c;                                   \
+                                                            \
+        uint16_t _hi = (to) >> 8;                           \
+        __alu_add8((cpu), _hi, ext >> 8, _f.c);             \
+                                                            \
+        (to) = (_hi << 8) | _lo;                            \
+        __set_flags(0, 0, h, c);                            \
+    } while (0)
 
-static INLINE void __ALUAdd16(GBProcessor *cpu, uint16_t *to, uint16_t from, uint8_t carry)
-{
-    // Perform two 8-bit adds (four 4-bit adds). Flags should automatically be right.
-    __ALUAdd8(cpu, (uint8_t *)(to) + 0, from & 0xFF, carry);
-    __ALUAdd8(cpu, (uint8_t *)(to) + 1, from >> 8, cpu->state.f.c);
-}
+// Add two 16 bit numbers, updating flags as necessary (haly carry and carry are set for bit 11 and 15)
+// Note that the zero flag is not affected by 16 bit addition.
+#define __alu_add16(cpu, to, from, carry)                   \
+    do {                                                    \
+        uint8_t _lo = (to) & 0xFF;                          \
+        uint16_t _hi = (to) >> 8;                           \
+        uint8_t z = _f.z;                                   \
+                                                            \
+        __alu_add8((cpu), _lo, (from) & 0xFF, carry);       \
+        __alu_add8((cpu), _hi, (from) >> 8, _f.c);          \
+                                                            \
+        (to) = (_hi << 8) | _lo;                            \
+        _f.z = z;                                           \
+    } while (0)
 
-static INLINE void __ALUSub8(GBProcessor *cpu, uint8_t *to, uint8_t from, uint8_t carry)
-{
-    // I remembered how to 2's complement
+// Subtract two 8 bit numbers, updating flags as necessary.
+#define __alu_sub8(cpu, to, from, borrow)                   \
+    do {                                                    \
+        __alu_add8(cpu, to, __alu_2_cmpl(from), (borrow));  \
+                                                            \
+        /* Set subtract flag; flip carries to borrow */     \
+        _f.n  = 1;                                          \
+        _f.c ^= 1;                                          \
+        _f.h ^= 1;                                          \
+    } while (0)
 
-    /*__ALUAdd8(cpu, to, __ALUComplement(from), ~carry);
+// Logical AND two values, updating flags as necessary.
+#define __alu_and8(cpu, to, from)           \
+    do {                                    \
+        (to) &= (from);                     \
+        __set_flags( !(to), 0, 1, 0);       \
+    } while (0)
 
-    cpu->state.f.n = 1;
+// Logical XOR two values, updating flags as necessary.
+#define __alu_xor8(cpu, to, from)           \
+    do {                                    \
+        (to) ^= (from);                     \
+        __set_flags(!(to), 0, 0, 0);        \
+    } while (0)
 
-    // The gameboy flips these for some reason...
-    if (cpu->state.f.n)
-    {
-        cpu->state.f.c = ~cpu->state.f.c;
-        cpu->state.f.h = ~cpu->state.f.h;
-    }*/
+// Logical OR two values, updating flags as necessary.
+#define __alu_or8(cpu, to, from)            \
+    do {                                    \
+        (to) |= (from);                     \
+        __set_flags(!(to), 0, 0, 0);        \
+    } while (0)
 
-    uint8_t result = (*to) + (~from + 1) - (~carry + 1);
+// Compare two values, updating flags as necessary
+#define __alu_cmp(cpu, to, from)            \
+    do {                                    \
+        uint8_t tmp = (to);                 \
+        __alu_sub8(cpu, tmp, from, 0);      \
+    } while (0)
 
-    cpu->state.f.z = !result;
-    cpu->state.f.n = 1;
-    cpu->state.f.h = !!((((*to) & 0x0F) + ((~from + 1) & 0x0F)) & 0x08);
-    cpu->state.f.c = !!(result & 0x80);
+// Rotate the passed value left by one, updating flags as necessary
+#define __alu_rol(v)                        \
+    do {                                    \
+        (v) = (((v) >> 7) | ((v) << 1));    \
+        __set_flags(!(v), 0, 0, (v) & 1);   \
+    } while (0)
 
-    (*to) = result;
-}
 
-static INLINE void __ALUAnd8(GBProcessor *cpu, uint8_t *to, uint8_t from)
-{
-    *to &= from;
+// Rotate the passed value right by one, updating flags as necessary
+#define __alu_ror(v)                        \
+    do {                                    \
+        __set_flags(!(v), 0, 0, (v) & 1);   \
+        (v) = (((v) << 7) | ((v) >> 1));    \
+    } while (0)
 
-    cpu->state.f.z = !(*to);
-    cpu->state.f.n = 0;
-    cpu->state.f.h = 1;
-    cpu->state.f.c = 0;
-}
+// Rotate the passed value left by one through carry, updating flags as necessary
+#define __alu_rolc(v)                       \
+    do {                                    \
+        /* Use h as a tmp flag */           \
+        _f.h = _f.c;                        \
+        _f.c = (v) >> 7;                    \
+                                            \
+        (v) <<= 1;                          \
+        (v) |= _f.h;                        \
+                                            \
+        __set_flags(!(v), 0, 0, _f.c);      \
+    } while (0)
 
-static INLINE void __ALUXor8(GBProcessor *cpu, uint8_t *to, uint8_t from)
-{
-    *to ^= from;
-
-    cpu->state.f.z = !(*to);
-    cpu->state.f.n = 0;
-    cpu->state.f.h = 0;
-    cpu->state.f.c = 0;
-}
-
-static INLINE void __ALUOr8(GBProcessor *cpu, uint8_t *to, uint8_t from)
-{
-    *to |= from;
-
-    cpu->state.f.z = !(*to);
-    cpu->state.f.n = 0;
-    cpu->state.f.h = 0;
-    cpu->state.f.c = 0;
-}
-
-static INLINE void __ALUCP8(GBProcessor *cpu, uint8_t *to, uint8_t from)
-{
-    uint8_t initial = *to;
-
-    __ALUSub8(cpu, to, from, 0);
-
-    *to = initial;
-}
-
-static INLINE void __ALURotateRight(uint8_t *reg)
-{
-    (*reg) = ((*reg) << 7) | ((*reg) >> 1);
-}
-
-static INLINE void __ALURotateLeft(uint8_t *reg)
-{
-    (*reg) = ((*reg) >> 7) | ((*reg) << 1);
-}
+// Rotate the passed value right by one through carry, updating flags as necessary
+#define __alu_rorc(v)                       \
+    do {                                    \
+        /* Use h as a tmp flag */           \
+        _f.h = _f.c;                        \
+        _f.c = (v) & 1;                     \
+                                            \
+        (v) >>= 1;                          \
+        (v) |= _f.h << 7;                   \
+                                            \
+        __set_flags(!(v), 0, 0, _f.c);      \
+    } while (0)
 
 #endif /* !defined(kGBDisassembler) */
 
@@ -188,413 +234,308 @@ static INLINE void __ALURotateLeft(uint8_t *reg)
 
 #pragma mark - Argument Wrappers
 
-#define op_simple(code, str, impl)                                          \
-    op(code, 1, str, {                                                      \
-        impl;                                                               \
-                                                                            \
-        cpu->state.mode = kGBProcessorModeFetch;                            \
+// Macros for setting/testing states
+#define __modetest(m)   ((cpu)->state.mode == kGBProcessorMode ## m)
+#define __modeset(m)    ((cpu)->state.mode  = kGBProcessorMode ## m)
+#define __accessed()    ((cpu)->state.accessed)
+
+// Simple argument taking a single cycle
+#define op_simple(code, str, impl) op(code, 1, str, { impl; __modeset(Fetch); })
+
+// Simple argument taking two cycles
+#define op_stall(code, len, str, impl)                                  \
+    op(code, len, str, {                                                \
+        if (__modetest(Run)) {                                          \
+            impl;                                                       \
+                                                                        \
+            __mmu_read(cpu, 0x0000);                                    \
+            __modeset(Stalled);                                         \
+        } else if (__modetest(Stalled) && __accessed()) {               \
+             __modeset(Fetch);                                          \
+        }                                                               \
     })
 
-#define op_stall(code, len, str, impl)                                      \
-    op(code, len, str, {                                                    \
-        if (cpu->state.mode == kGBProcessorModeRun) {                       \
-            impl;                                                           \
-                                                                            \
-            __GBProcessorRead(cpu, 0x0000);                                 \
-                                                                            \
-            cpu->state.mode = kGBProcessorModeStalled;                      \
-        } else if (cpu->state.mode == kGBProcessorModeStalled) {            \
-            if (cpu->state.accessed)                                        \
-                cpu->state.mode = kGBProcessorModeFetch;                    \
-        }                                                                   \
+// Instruction taking two cycles.
+#define op_wait(code, len, str, pre, post)                              \
+    op(code, len, str, {                                                \
+        if (__modetest(Run)) {                                          \
+            pre;                                                        \
+            __modeset(Wait1);                                           \
+        } else if (__modetest(Wait1) && __accessed()) {                 \
+            post;                                                       \
+            __modeset(Fetch);                                           \
+        }                                                               \
     })
 
-#define op_wait(code, len, str, pre, post)                                  \
-    op(code, len, str, {                                                    \
-        if (cpu->state.mode == kGBProcessorModeRun) {                       \
-            pre;                                                            \
-                                                                            \
-            cpu->state.mode = kGBProcessorModeWait1;                        \
-        } else if (cpu->state.mode == kGBProcessorModeWait1) {              \
-            if (cpu->state.accessed)                                        \
-            {                                                               \
-                post;                                                       \
-                                                                            \
-                cpu->state.mode = kGBProcessorModeFetch;                    \
-            }                                                               \
-        }                                                                   \
+// Instruction taking three cycles including a stall.
+#define op_wait_stall(code, len, str, pre, post)                        \
+    op(code, len, str, {                                                \
+        if (__modetest(Run)) {                                          \
+            pre;                                                        \
+            __modeset(Wait1);                                           \
+        } else if (__modetest(Wait1) && __accessed()) {                 \
+            post;                                                       \
+                                                                        \
+            __mmu_read(cpu, 0x0000);                                    \
+            __modeset(Stalled);                                         \
+        } else if (__modetest(Stalled) && __accessed()) {               \
+            __modeset(Fetch);                                           \
+        }                                                               \
     })
 
-#define op_wait_stall(code, len, str, pre, post)                            \
-    op(code, len, str, {                                                    \
-        if (cpu->state.mode == kGBProcessorModeRun) {                       \
-            pre;                                                            \
-                                                                            \
-            cpu->state.mode = kGBProcessorModeWait1;                        \
-        } else if (cpu->state.mode == kGBProcessorModeWait1) {              \
-            if (cpu->state.accessed)                                        \
-            {                                                               \
-                post;                                                       \
-                                                                            \
-                __GBProcessorRead(cpu, 0x0000);                             \
-                                                                            \
-                cpu->state.mode = kGBProcessorModeStalled;                  \
-            }                                                               \
-        } else if (cpu->state.mode == kGBProcessorModeStalled) {            \
-            if (cpu->state.accessed)                                        \
-                cpu->state.mode = kGBProcessorModeFetch;                    \
-        }                                                                   \
+// Instruction taking three cycles waiting twice.
+#define op_wait2(code, len, str, pre, mid, post)                        \
+    op(code, len, str, {                                                \
+        if (__modetest(Run)) {                                          \
+            pre;                                                        \
+            __modeset(Wait1);                                           \
+        } else if (__modetest(Wait1) && __accessed()) {                 \
+            mid;                                                        \
+            __modeset(Wait2);                                           \
+        } else if (__modetest(Wait2) && __accessed()) {                 \
+            post;                                                       \
+            __modeset(Fetch);                                           \
+        }                                                               \
     })
 
-#define op_wait2(code, len, str, pre, mid, post)                            \
-    op(code, len, str, {                                                    \
-        if (cpu->state.mode == kGBProcessorModeRun) {                       \
-            pre;                                                            \
-                                                                            \
-            cpu->state.mode = kGBProcessorModeWait1;                        \
-        } else if (cpu->state.mode == kGBProcessorModeWait1) {              \
-            if (cpu->state.accessed)                                        \
-            {                                                               \
-                mid;                                                        \
-                                                                            \
-                cpu->state.mode = kGBProcessorModeWait2;                    \
-            }                                                               \
-        } else if (cpu->state.mode == kGBProcessorModeWait2) {              \
-            if (cpu->state.accessed)                                        \
-            {                                                               \
-                post;                                                       \
-                                                                            \
-                cpu->state.mode = kGBProcessorModeFetch;                    \
-            }                                                               \
-        }                                                                   \
+// Instruction taking 4 cycles including a stall
+#define op_wait2_stall(code, len, str, pre, mid, post)                  \
+    op(code, len, str, {                                                \
+        if (__modetest(Run)) {                                          \
+            pre;                                                        \
+            __modeset(Wait1);                                           \
+        } else if (__modetest(Wait1) && __accessed()) {                 \
+            mid;                                                        \
+            __modeset(Wait2);                                           \
+        } else if (__modetest(Wait2) && __accessed()) {                 \
+            post;                                                       \
+                                                                        \
+            __mmu_read(cpu, 0x0000);                                    \
+            __modeset(Stalled);                                         \
+        } else if (__modetest(Stalled) && __accessed()) {               \
+            __modeset(Fetch);                                           \
+        }                                                               \
     })
 
-#define op_wait2_stall(code, len, str, pre, mid, post)                      \
-    op(code, len, str, {                                                    \
-        if (cpu->state.mode == kGBProcessorModeRun) {                       \
-            pre;                                                            \
-                                                                            \
-            cpu->state.mode = kGBProcessorModeWait1;                        \
-        } else if (cpu->state.mode == kGBProcessorModeWait1) {              \
-            if (cpu->state.accessed)                                        \
-            {                                                               \
-                mid;                                                        \
-                                                                            \
-                cpu->state.mode = kGBProcessorModeWait2;                    \
-            }                                                               \
-        } else if (cpu->state.mode == kGBProcessorModeWait2) {              \
-            if (cpu->state.accessed)                                        \
-            {                                                               \
-                post;                                                       \
-                                                                            \
-                __GBProcessorRead(cpu, 0x0000);                             \
-                                                                            \
-                cpu->state.mode = kGBProcessorModeStalled;                  \
-            }                                                               \
-        } else if (cpu->state.mode == kGBProcessorModeStalled) {            \
-            if (cpu->state.accessed)                                        \
-                cpu->state.mode = kGBProcessorModeFetch;                    \
-        }                                                                   \
+// Instruction taking 4 cycles waiting three times.
+#define op_wait3(code, len, str, pre, mid1, mid2, post)                 \
+    op(code, len, str, {                                                \
+        if (__modetest(Run)) {                                          \
+            pre;                                                        \
+            __modeset(Wait1);                                           \
+        } else if (__modetest(Wait1) && __accessed()) {                  \
+            mid1;                                                       \
+            __modeset(Wait2);                                           \
+        } else if (__modetest(Wait2) && __accessed()) {                 \
+            mid2;                                                       \
+            __modeset(Wait3);                                           \
+        } else if (__modetest(Wait3) && __accessed()) {                  \
+            post;                                                       \
+            __modeset(Fetch);                                           \
+        }                                                               \
     })
 
-#define op_wait3(code, len, str, pre, mid1, mid2, post)                     \
-    op(code, len, str, {                                                    \
-        if (cpu->state.mode == kGBProcessorModeRun) {                       \
-            pre;                                                            \
-                                                                            \
-            cpu->state.mode = kGBProcessorModeWait1;                        \
-        } else if (cpu->state.mode == kGBProcessorModeWait1) {              \
-            if (cpu->state.accessed)                                        \
-            {                                                               \
-                mid1;                                                       \
-                                                                            \
-                cpu->state.mode = kGBProcessorModeWait2;                    \
-            }                                                               \
-        } else if (cpu->state.mode == kGBProcessorModeWait2) {              \
-            if (cpu->state.accessed)                                        \
-            {                                                               \
-                mid2;                                                       \
-                                                                            \
-                cpu->state.mode = kGBProcessorModeWait3;                    \
-            }                                                               \
-        } else if (cpu->state.mode == kGBProcessorModeWait3) {              \
-            if (cpu->state.accessed)                                        \
-            {                                                               \
-                post;                                                       \
-                                                                            \
-                cpu->state.mode = kGBProcessorModeFetch;                    \
-            }                                                               \
-        }                                                                   \
+// Instruction taking 5 cycles waiting three times and stalling.        
+#define op_wait3_stall(code, len, str, pre, mid1, mid2, post)           \
+    op(code, len, str, {                                                \
+        if (__modetest(Run)) {                                          \
+            pre;                                                        \
+            __modeset(Wait1);                                           \
+        } else if (__modetest(Wait1) && __accessed()) {                 \
+            mid1;                                                       \
+            __modeset(Wait2);                                           \
+        } else if (__modetest(Wait2) && __accessed()) {                 \
+            mid2;                                                       \
+            __modeset(Wait3);                                           \
+        } else if (__modetest(Wait3) && __accessed()) {                 \
+            post;                                                       \
+                                                                        \
+            __mmu_read(cpu, 0x0000);                                    \
+            __modeset(Stalled);                                         \
+        } else if (__modetest(Stalled) && __accessed()) {               \
+            __modeset(Fetch);                                           \
+        }                                                               \
     })
 
-#define op_wait3_stall(code, len, str, pre, mid1, mid2, post)               \
-    op(code, len, str, {                                                    \
-        if (cpu->state.mode == kGBProcessorModeRun) {                       \
-            pre;                                                            \
-                                                                            \
-            cpu->state.mode = kGBProcessorModeWait1;                        \
-        } else if (cpu->state.mode == kGBProcessorModeWait1) {              \
-            if (cpu->state.accessed)                                        \
-            {                                                               \
-                mid1;                                                       \
-                                                                            \
-                cpu->state.mode = kGBProcessorModeWait2;                    \
-            }                                                               \
-        } else if (cpu->state.mode == kGBProcessorModeWait2) {              \
-            if (cpu->state.accessed)                                        \
-            {                                                               \
-                mid2;                                                       \
-                                                                            \
-                cpu->state.mode = kGBProcessorModeWait3;                    \
-            }                                                               \
-        } else if (cpu->state.mode == kGBProcessorModeWait3) {              \
-            if (cpu->state.accessed)                                        \
-            {                                                               \
-                post;                                                       \
-                                                                            \
-                __GBProcessorRead(cpu, 0x0000);                             \
-                                                                            \
-                cpu->state.mode = kGBProcessorModeStalled;                  \
-            }                                                               \
-        } else if (cpu->state.mode == kGBProcessorModeStalled) {            \
-            if (cpu->state.accessed)                                        \
-                cpu->state.mode = kGBProcessorModeFetch;                    \
-        }                                                                   \
-    })
+// Instruction operating on memory at (hl)
+#define op_hl(code, str, impl)          op_wait(code, 1, str, { __mmu_read(cpu, _hl); }, impl)
 
-#define op_hl(code, str, impl)                                              \
-    op_wait(code, 1, str, {                                                 \
-        __GBProcessorRead(cpu, cpu->state.hl);                              \
-    }, impl)
+// Instruction operating on an 8-bit argument from (pc)
+#define op_arg(code, str, impl)         op_wait(code, 2, str, { __mmu_read_arg(cpu); }, impl)
 
-#define op_arg(code, str, impl)                                             \
-    op_wait(code, 2, str, {                                                 \
-        __GBProcessorReadArgument(cpu);                                     \
-    }, impl)
+// Instruction operating on a 16-bit argument from (pc)
+#define op_arg16(code, str, intr, impl) op_wait2(code, 3, str, { __mmu_read_arg(cpu); }, { intr; __mmu_read_arg(cpu); }, impl)
 
-#define op_arg16(code, str, intr, impl)                                     \
-    op_wait2(code, 3, str, {                                                \
-        __GBProcessorReadArgument(cpu);                                     \
-    }, {                                                                    \
-        intr;                                                               \
-                                                                            \
-        __GBProcessorReadArgument(cpu);                                     \
-    }, impl)
+// Instruction taking 1 cycle with CB prefix
+#define op_pre_simple(code, str, impl)  op_pre(code, 1, str, { impl; __modeset(Fetch); })
 
-#define op_pre_simple(code, str, impl)                                      \
-    op_pre(code, 1, str, {                                                  \
-        impl;                                                               \
-                                                                            \
-        cpu->state.mode = kGBProcessorModeFetch;                            \
-    })
-
-#define op_pre_hl(code, str, impl)                                          \
-    op_pre(code, 1, str, {                                                  \
-        if (cpu->state.mode == kGBProcessorModePrefix) {                    \
-            __GBProcessorRead(cpu, cpu->state.hl);                          \
-                                                                            \
-            cpu->state.mode = kGBProcessorModeWait1;                        \
-        } else if (cpu->state.mode == kGBProcessorModeWait1) {              \
-            if (cpu->state.accessed)                                        \
-            {                                                               \
-                impl;                                                       \
-                                                                            \
-                __GBProcessorWrite(cpu, cpu->state.hl, cpu->state.mdr);     \
-                                                                            \
-                cpu->state.mode = kGBProcessorModeWait2;                    \
-            }                                                               \
-        } else if (cpu->state.mode == kGBProcessorModeWait2) {              \
-            if (cpu->state.accessed)                                        \
-                cpu->state.mode = kGBProcessorModeFetch;                    \
-        }                                                                   \
+// Instruction with CB prefix operating on memory at (hl)
+#define op_pre_hl(code, str, impl)                                      \
+    op_pre(code, 1, str, {                                              \
+        if (__modetest(Prefix)) {                                       \
+            __mmu_read(cpu, _hl);                                       \
+            __modeset(Wait1);                                           \
+        } else if (__modetest(Wait1) && __accessed()) {                 \
+            impl;                                                       \
+                                                                        \
+            __mmu_write(cpu, _hl, _mdr);                                \
+            __modeset(Wait2);                                           \
+        } else if (__modetest(Wait2) && __accessed()) {                 \
+            __modeset(Fetch);                                           \
+        }                                                               \
     })
 
 #pragma mark - Load Macros
 
-#define ld_r(code, dst, src)                                                \
-    op_simple(code, "ld " #dst ", " #src, {                                 \
-        cpu->state.dst = cpu->state.src;                                    \
+// Load register from register
+#define ld_r(code, dst, src)                                            \
+    op_simple(code, "ld " #dst ", " #src, {                             \
+        cpu->state.dst = cpu->state.src;                                \
     })
 
 
-#define ld_rr(code, regs)                                                   \
-    op_arg16(code, "ld " #regs ", " d16, {                                  \
-        cpu->state.regs = cpu->state.mdr;                                   \
-    }, {                                                                    \
-        cpu->state.regs |= cpu->state.mdr << 8;                             \
+// Load register pair with 16-bit argument
+#define ld_rr(code, regs)                                               \
+    op_arg16(code, "ld " #regs ", " d16, {                              \
+        _reg(regs) = _mdr;                                              \
+    }, {                                                                \
+        _reg(regs) |= _mdr << 8;                                        \
     })
 
-#define ld_a_rr(code, regs)                                                 \
-    op_wait(code, 1, "ld a, (" #regs ")", {                                 \
-        __GBProcessorRead(cpu, cpu->state.regs);                            \
-    }, {                                                                    \
-        cpu->state.a = cpu->state.mdr;                                      \
-    })
+// Load accumulator with memory address at register pair
+#define ld_a_rr(code, regs)                                             \
+    op_wait(code, 1, "ld a, (" #regs ")", {                             \
+        __mmu_read(cpu, _reg(regs));                                    \
+    }, { _a = _mdr; })
 
-#define ld_rr_a(code, regs)                                                 \
-    op_wait(code, 1, "ld (" #regs "), a", {                                 \
-        __GBProcessorWrite(cpu, cpu->state.regs, cpu->state.a);             \
-    }, {                                                                    \
-        /* nothing */                                                       \
-    })
+// Load memory address at register pair with accumulator value
+#define ld_rr_a(code, regs)                                             \
+    op_wait(code, 1, "ld (" #regs "), a", {                             \
+        __mmu_write(cpu, _reg(regs), _a);                               \
+    }, { /* nothing */ })
 
-#define ld_m(code, reg)                                                     \
-    op_arg(code, "ld " #reg ", " d8, {                                      \
-        cpu->state.reg = cpu->state.mdr;                                    \
-    })
+// Load register with 8-bit argument
+#define ld_m(code, r) op_arg(code, "ld " #r ", " d8, { _reg(r) = _mdr; })
 
-#define ld_hl(code, reg)                                                    \
-    op_wait(code, 1, "ld (hl), " #reg, {                                    \
-        __GBProcessorWrite(cpu, cpu->state.hl, cpu->state.reg);             \
-    }, {                                                                    \
-        /* nothing */                                                       \
-    })
+// Load memory at (hl) with value from register
+#define ld_hl(code, r)                                                  \
+    op_wait(code, 1, "ld (hl), " #r, {                                  \
+        __mmu_write(cpu, _hl, _reg(r));                                 \
+    }, { /* nothing */ })
 
-#define ld_r_hl(code, reg)                                                  \
-    op_hl(code, "ld " #reg ", (hl)", {                                      \
-        cpu->state.reg = cpu->state.mdr;                                    \
-    })
+// Load register with value of memory at (hl)
+#define ld_r_hl(code, r) op_hl(code, "ld " #r ", (hl)", { _reg(r) = _mdr; })
 
 #pragma mark - Control flow macros
 
-#define jr(code, str, cond)                                                             \
-    op_wait_stall(code, 2, "jr " str d8, {                                              \
-        __GBProcessorReadArgument(cpu);                                                 \
-    }, {                                                                                \
-        if (!cond)                                                                      \
-        {                                                                               \
-            cpu->state.mode = kGBProcessorModeFetch;                                    \
-                                                                                        \
-            return;                                                                     \
-        }                                                                               \
-                                                                                        \
-        cpu->state.pc += __ALUSignExtend(cpu->state.mdr);                               \
+// Conditional relative jump to sign extended 8-bit argument
+#define jr(code, str, cond)                                             \
+    op_wait_stall(code, 2, "jr " str d8, { __mmu_read_arg(cpu); }, {    \
+        if (!cond) {                                                    \
+            __modeset(Fetch);                                           \
+        } else {                                                        \
+            _pc += __alu_extend(_mdr);                                  \
+        }                                                               \
     })
 
-#define jmp(code, str, cond)                                                            \
-    op_wait2_stall(code, 3, "jp " str d16, {                                            \
-        __GBProcessorReadArgument(cpu);                                                 \
-    }, {                                                                                \
-        __GBProcessorReadArgument(cpu);                                                 \
-                                                                                        \
-        cpu->state.data = cpu->state.mdr;                                               \
-    }, {                                                                                \
-        if (!cond)                                                                      \
-        {                                                                               \
-            cpu->state.mode = kGBProcessorModeFetch;                                    \
-                                                                                        \
-            return;                                                                     \
-        }                                                                               \
-                                                                                        \
-        cpu->state.pc = cpu->state.data | (cpu->state.mdr << 8);                        \
+// Conditional absolute jump to 16-bit argument
+#define jmp(code, str, cond)                                            \
+    op_wait2_stall(code, 3, "jp " str d16, {                            \
+        __mmu_read_arg(cpu);                                            \
+    }, {                                                                \
+        _data = _mdr;                                                   \
+        __mmu_read_arg(cpu);                                            \
+    }, {                                                                \
+        if (!cond) {                                                    \
+            __modeset(Fetch);                                           \
+            return;                                                     \
+        } else {                                                        \
+            _pc = _data | (uint16_t)(_mdr << 8);                        \
+        }                                                               \
     })
 
-#define call(code, str, cond)                                                           \
-    op(code, 3, "call " str d16, {                                                      \
-        if (cpu->state.mode == kGBProcessorModeRun) {                                   \
-            __GBProcessorReadArgument(cpu);                                             \
-                                                                                        \
-            cpu->state.mode = kGBProcessorModeWait1;                                    \
-        } else if (cpu->state.mode == kGBProcessorModeWait1) {                          \
-            if (cpu->state.accessed)                                                    \
-            {                                                                           \
-                cpu->state.data = cpu->state.mdr;                                       \
-                                                                                        \
-                __GBProcessorReadArgument(cpu);                                         \
-                                                                                        \
-                cpu->state.mode = kGBProcessorModeWait2;                                \
-            }                                                                           \
-        } else if (cpu->state.mode == kGBProcessorModeWait2) {                          \
-            if (cpu->state.accessed)                                                    \
-            {                                                                           \
-                cpu->state.data |= (cpu->state.mdr << 8);                               \
-                                                                                        \
-                if (!cond)                                                              \
-                {                                                                       \
-                    cpu->state.mode = kGBProcessorModeFetch;                            \
-                                                                                        \
-                    return;                                                             \
-                }                                                                       \
-                                                                                        \
-                __GBProcessorWrite(cpu, cpu->state.sp - 1, cpu->state.pc >> 8);         \
-                cpu->state.mode = kGBProcessorModeWait3;                                \
-            }                                                                           \
-        } else if (cpu->state.mode == kGBProcessorModeWait3) {                          \
-            if (cpu->state.accessed)                                                    \
-            {                                                                           \
-                __GBProcessorWrite(cpu, cpu->state.sp - 2, cpu->state.pc & 0xFF);       \
-                                                                                        \
-                cpu->state.mode = kGBProcessorModeWait4;                                \
-            }                                                                           \
-        } else if (cpu->state.mode == kGBProcessorModeWait4) {                          \
-            if (cpu->state.accessed)                                                    \
-            {                                                                           \
-                __GBProcessorRead(cpu, 0x0000);                                         \
-                                                                                        \
-                cpu->state.pc = cpu->state.data;                                        \
-                cpu->state.sp -= 2;                                                     \
-                                                                                        \
-                cpu->state.mode = kGBProcessorModeStalled;                              \
-            }                                                                           \
-        } else if (cpu->state.mode == kGBProcessorModeStalled) {                        \
-            if (cpu->state.accessed)                                                    \
-                cpu->state.mode = kGBProcessorModeFetch;                                \
-        }                                                                               \
+// Conditionally call subroutine at address, pushing return address to the stack
+#define call(code, str, cond)                                           \
+    op(code, 3, "call " str d16, {                                      \
+        if (__modetest(Run)) {                                          \
+            __mmu_read_arg(cpu);                                        \
+            __modeset(Wait1);                                           \
+        } else if (__modetest(Wait1) && __accessed()) {                 \
+            _data = _mdr;                                               \
+            __mmu_read_arg(cpu);                                        \
+            __modeset(Wait2);                                           \
+        } else if (__modetest(Wait2) && __accessed()) {                 \
+            _data |= (_mdr << 8);                                       \
+                                                                        \
+            if (!cond) {                                                \
+                __modeset(Fetch);                                       \
+            } else {                                                    \
+                __mmu_write(cpu, _sp - 1, _pc >> 8);                    \
+                __modeset(Wait3);                                       \
+            }                                                           \
+        } else if (__modetest(Wait3) && __accessed()) {                 \
+            __mmu_write(cpu, _sp - 2, _pc & 0xFF);                      \
+            __modeset(Wait4);                                           \
+        } else if (__modetest(Wait4) && __accessed()) {                 \
+            __mmu_read(cpu, 0x0000);                                    \
+            _pc = _data;                                                \
+            _sp -= 2;                                                   \
+                                                                        \
+            __modeset(Stalled);                                         \
+        } else if (__modetest(Stalled) && __accessed()) {               \
+            __modeset(Fetch);                                           \
+        }                                                               \
     })
 
-#define ret(code, str, cond)                                                            \
-    op_wait3_stall(code, 1, "ret " str, {                                               \
-        __GBProcessorRead(cpu, 0x0000);                                                 \
-    }, {                                                                                \
-        if (!cond)                                                                      \
-        {                                                                               \
-            cpu->state.mode = kGBProcessorModeFetch;                                    \
-                                                                                        \
-            return;                                                                     \
-        }                                                                               \
-                                                                                        \
-        __GBProcessorRead(cpu, cpu->state.sp + 0);                                      \
-    }, {                                                                                \
-        __GBProcessorRead(cpu, cpu->state.sp + 1);                                      \
-                                                                                        \
-        cpu->state.pc = cpu->state.mdr;                                                 \
-    }, {                                                                                \
-        cpu->state.pc |= cpu->state.mdr << 8;                                           \
-        cpu->state.sp += 2;                                                             \
+// Return from subroutine to address on the top of stack
+#define ret(code, str, cond)                                            \
+    op_wait3_stall(code, 1, "ret " str, { __mmu_read(cpu, 0x0000); }, { \
+        if (!cond) {                                                    \
+            __modeset(Fetch);                                           \
+        } else {                                                        \
+            __mmu_read(cpu, _sp + 0);                                   \
+        }                                                               \
+    }, {                                                                \
+        _pc = _mdr;                                                     \
+        __mmu_read(cpu, _sp + 1);                                       \
+    }, {                                                                \
+        _pc |= (uint16_t)(_mdr << 8);                                   \
+        _sp += 2;                                                       \
     })
 
-#define rst(code, dst)                                                                  \
-    op_wait2_stall(code, 1, "rst $" #dst, {                                             \
-        __GBProcessorWrite(cpu, cpu->state.sp - 1, cpu->state.pc >> 8);                 \
-    }, {                                                                                \
-        __GBProcessorWrite(cpu, cpu->state.sp - 2, cpu->state.pc & 0xFF);               \
-    }, {                                                                                \
-        cpu->state.pc = dst;                                                            \
-        cpu->state.sp -= 2;                                                             \
+// Jump to a predefined reset routine, saving return address to the top of the stack
+#define rst(code, dst)                                                  \
+    op_wait2_stall(code, 1, "rst $" #dst, {                             \
+        __mmu_write(cpu, _sp - 1, _pc >> 8);                            \
+    }, {                                                                \
+        __mmu_write(cpu, _sp - 2, _pc & 0xFF);                          \
+    }, {                                                                \
+        _pc = dst;                                                      \
+        _sp -= 2;                                                       \
     })
 
 #pragma mark - Stack manipulation macros
 
-#define pop(code, regs)                                                     \
-    op_wait2_stall(code, 1, "pop " #regs, {                                 \
-        __GBProcessorRead(cpu, cpu->state.sp + 0);                          \
-    }, {                                                                    \
-        cpu->state.regs = cpu->state.mdr;                                   \
-                                                                            \
-        __GBProcessorRead(cpu, cpu->state.sp + 1);                          \
-    }, {                                                                    \
-        cpu->state.regs |= cpu->state.mdr << 8;                             \
-        cpu->state.sp += 2;                                                 \
+// Pop a register pair from the top of the stack
+#define pop(code, regs)                                                 \
+    op_wait2_stall(code, 1, "pop " #regs, {                             \
+        __mmu_read(cpu, _sp + 0);                                       \
+        _sp++;                                                          \
+    }, {                                                                \
+        _reg(regs) = _mdr;                                              \
+        __mmu_read(cpu, _sp + 1);                                       \
+    }, {                                                                \
+        _reg(regs) |= (uint16_t)(_mdr << 8);                            \
+        _sp += 2;                                                       \
     })
 
-#define push(code, regs)                                                    \
-    op_wait2_stall(code, 1, "push " #regs, {                                \
-        __GBProcessorWrite(cpu, cpu->state.sp - 1, cpu->state.regs >> 8);   \
-    }, {                                                                    \
-        __GBProcessorWrite(cpu, cpu->state.sp - 2, cpu->state.regs & 0xFF); \
-    }, {                                                                    \
-        cpu->state.sp -= 2;                                                 \
-    })
+// Push a register pair to the top of the stack
+#define push(code, regs)                                                \
+    op_wait2_stall(code, 1, "push " #regs, {                            \
+        __mmu_write(cpu, _sp - 1, _reg(regs) >> 8);                     \
+    }, {                                                                \
+        __mmu_write(cpu, _sp - 2, _reg(regs) & 0xFF);                   \
+    }, { _sp -= 2; })
 
 #pragma mark - Undefined instruction macros
 
@@ -603,1019 +544,782 @@ static INLINE void __ALURotateLeft(uint8_t *reg)
         fprintf(stderr, "Error: Undefined instruction 0x%02X called.\n", this->value);  \
         fprintf(stderr, "Note: A real gameboy would lockup here.\n");                   \
                                                                                         \
-        cpu->state.mode = kGBProcessorModeOff;                                          \
+        __modeset(Off);                                                                 \
     })
 
 #pragma mark - Logical operation macros
 
-#define inc_r(code, reg)                                                    \
-    op_simple(code, "inc " #reg, {                                          \
-        uint8_t carry = cpu->state.f.c;                                       \
-        uint8_t one = 1;                                                      \
-                                                                            \
-        __ALUAdd8(cpu, &cpu->state.reg, one, 0);                            \
-        cpu->state.f.c = carry;                                             \
+// Increment a given register by 1
+#define inc_r(code, r)                                                  \
+    op_simple(code, "inc " #r, {                                        \
+        uint8_t carry = _f.c;                                           \
+        __alu_add8(cpu, _reg(r), 1, 0);                                 \
+        _f.c = carry;                                                   \
     })
 
-#define dec_r(code, reg)                                                    \
-    op_simple(code, "dec " #reg, {                                          \
-        uint8_t carry = cpu->state.f.c;                                       \
-        uint8_t one = 1;                                                      \
-                                                                            \
-        __ALUSub8(cpu, &cpu->state.reg, one, 0);                            \
-        cpu->state.f.c = carry;                                             \
+// Decrement a given register by 1
+#define dec_r(code, r)                                                  \
+    op_simple(code, "dec " #r, {                                        \
+        uint8_t carry = _f.c;                                           \
+        __alu_sub8(cpu, _reg(r), 1, 0);                                 \
+        _f.c = carry;                                                   \
     })
 
-#define inc_rr(code, regs)                                                  \
-    op_stall(code, 1, "inc " #regs, {                                       \
-            cpu->state.regs++;                                              \
+// Increment a register pair. Don't update flags.
+#define inc_rr(code, regs) op_stall(code, 1, "inc " #regs, { _reg(regs)++; })
+
+// Decrement a register pair. Don't update flags.
+#define dec_rr(code, regs) op_stall(code, 1, "dec " #regs, { _reg(regs)--; })
+
+// Add a register pair to hl. Don't update zero flag.
+#define add_hl(code, regs)                                              \
+    op_stall(code, 1, "add hl, " #regs, {                               \
+        uint8_t zero = _f.z;                                            \
+        __alu_add16(cpu, _hl, _reg(regs), 0);                           \
+        _f.z = zero;                                                    \
     })
 
-#define dec_rr(code, regs)                                                  \
-    op_stall(code, 1, "dec " #regs, {                                       \
-        cpu->state.regs--;                                                  \
+// Simple ALU operation on the accumulator with a register argument and carry
+#define op_alu_carry(code, name, r, func, c)                            \
+    op_simple(code, name " a, " #r, {                                   \
+        func(cpu, _a, _reg(r), c);                                      \
     })
 
-#define add_hl(code, reg)                                                   \
-    op_stall(code, 1, "add hl, " #reg, {                                    \
-        uint8_t zero = cpu->state.f.z;                                        \
-                                                                            \
-        __ALUAdd16(cpu, &cpu->state.hl, cpu->state.reg, 0);                 \
-                                                                            \
-        cpu->state.f.z = zero;                                              \
-    })
+// Add register to accumulator (no carry)
+#define add(code, reg)                  op_alu_carry(code, "add", reg, __alu_add8, 0)
 
-#define op_alu(code, name, reg, func, c)                                    \
-    op_simple(code, name " a, " #reg, {                                     \
-        func(cpu, &cpu->state.a, cpu->state.reg, c);                        \
-    })
+// Add register to accumulator (with carry)
+#define adc(code, reg)                  op_alu_carry(code, "adc", reg, __alu_add8, _f.c)
 
-#define add(code, reg) op_alu(code, "add", reg, __ALUAdd8, 0)
+// Subtract register from accumulator (no carry)
+#define sub(code, reg)                  op_alu_carry(code, "sub", reg, __alu_sub8, 0)
 
-#define adc(code, reg) op_alu(code, "adc", reg, __ALUAdd8, cpu->state.f.c)
+// Subtract register from accumulator (with carry)
+#define sbc(code, reg)                  op_alu_carry(code, "sbc", reg, __alu_sub8, !_f.c)
 
-#define sub(code, reg) op_alu(code, "sub", reg, __ALUSub8, 0)
+// Simple ALU operation on accumulator (no carry)
+#define op_alu(code, name, r, func)     op_simple(code, name " " #r, { func(cpu, _a, _reg(r)); })
 
-#define sbc(code, reg) op_alu(code, "sbc", reg, __ALUSub8, cpu->state.f.c)
+// Simple ALU operation on memory at (hl)
+#define op_alu_hl(code, name, func)     op_hl(code, name " (hl)", { func(cpu, _a, _mdr); })
 
-#define alu_op(code, name, reg, func)                                       \
-    op_simple(code, name " " #reg, {                                        \
-        func(cpu, &cpu->state.a, cpu->state.reg);                           \
-    })
+// Simple ALU operation on literal argument
+#define op_alu_arg(code, name, func)    op_arg(code, name " " d8, { func(cpu, _a, _mdr); })
 
-#define alu_op_hl(code, name, func)                                         \
-    op_hl(code, name " (hl)", {                                             \
-        func(cpu, &cpu->state.a, cpu->state.mdr);                           \
-    })
+// Logical AND instruction
+#define and(code, reg)                  op_alu(code, "and", reg, __alu_and8)
 
-#define alu_op_arg(code, name, func)                                        \
-    op_arg(code, name " " d8, {                                             \
-        func(cpu, &cpu->state.a, cpu->state.mdr);                           \
-    })
+// Logical XOR instruction
+#define xor(code, reg)                  op_alu(code, "xor", reg, __alu_xor8)
 
-#define and(code, reg) alu_op(code, "and", reg, __ALUAnd8)
+// Logical OR instruction
+#define or(code, reg)                   op_alu(code, "or", reg, __alu_or8)
 
-#define xor(code, reg) alu_op(code, "xor", reg, __ALUXor8)
-
-#define or(code, reg) alu_op(code, "or", reg, __ALUOr8)
-
-#define cmp(code, reg) alu_op(code, "cp", reg, __ALUCP8)
+// Comparison instruction
+#define cmp(code, reg)                  op_alu(code, "cp", reg, __alu_cmp)
 
 #pragma mark - Instruction Implementation
 
 op_simple(0x00, "nop", { /* nop doesn't do anything, sorry */ });
 
-ld_rr(0x01, bc);
+ld_rr  (0x01, bc);  // ld bc, d16
+ld_rr_a(0x02, bc);  // ld (bc), a
+inc_rr (0x03, bc);  // inc bc
+inc_r  (0x04, b);   // inc b
+dec_r  (0x05, b);   // dec b
+ld_m   (0x06, b);   // ld b, d8
 
-ld_rr_a(0x02, bc);
-
-inc_rr(0x03, bc);
-
-inc_r(0x04, b);
-dec_r(0x05, b);
-
-ld_m(0x06, b);
-
-op_simple(0x07, "rcla", {
-    __ALURotateLeft(&cpu->state.a);
-
-    cpu->state.f.z = 0;
-    cpu->state.f.n = 0;
-    cpu->state.f.h = 0;
-    cpu->state.f.c = cpu->state.a & 1;
+// Rotate left accumulator (rlca)
+op_simple(0x07, "rlca", {
+    __alu_rol(_a);
+    _f.z = 0;
 });
 
+// ld (d16), sp (save stack pointer at literal address)
 op(0x08, 3, "ld (" d16 "), sp", {
-    if (cpu->state.mode == kGBProcessorModeRun) {
-        __GBProcessorReadArgument(cpu);
+    if (__modetest(Run)) {
+        __mmu_read_arg(cpu);
+        __modeset(Wait1);
+    } else if (__modetest(Wait1) && __accessed()) {
+        _data = _mdr;
 
-        cpu->state.mode = kGBProcessorModeWait1;
-    } else if (cpu->state.mode == kGBProcessorModeWait1) {
-        if (cpu->state.accessed)
-        {
-            cpu->state.data = cpu->state.mdr;
+        __mmu_read_arg(cpu);
+        __modeset(Wait2);
+    } else if (__modetest(Wait2) && __accessed()) {
+        _mar = _data | (uint16_t)(_mdr << 8);
 
-            __GBProcessorReadArgument(cpu);
+        __mmu_write(cpu, _mar, _sp & 0xFF);
+        __modeset(Wait3);
+    } else if (__modetest(Wait3) && __accessed()) {
+        _mar++;
 
-            cpu->state.mode = kGBProcessorModeWait2;
-        }
-    } else if (cpu->state.mode == kGBProcessorModeWait2) {
-        if (cpu->state.accessed)
-        {
-            cpu->state.mar = cpu->state.data | (cpu->state.mdr << 8);
-
-            __GBProcessorWrite(cpu, cpu->state.mar, cpu->state.sp & 0xFF);
-
-            cpu->state.mode = kGBProcessorModeWait3;
-        }
-    } else if (cpu->state.mode == kGBProcessorModeWait3) {
-        if (cpu->state.accessed)
-        {
-            cpu->state.mar++;
-
-            __GBProcessorWrite(cpu, cpu->state.mar, cpu->state.sp >> 8);
-
-            cpu->state.mode = kGBProcessorModeWait4;
-        }
-    } else if (cpu->state.mode == kGBProcessorModeWait4) {
-        if (cpu->state.accessed)
-        {
-            cpu->state.sp |= ((uint16_t)cpu->state.mdr) << 8;
-            cpu->state.mode = kGBProcessorModeFetch;
-        }
+        __mmu_write(cpu, _mar, _sp >> 8);
+        __modeset(Wait4);
+    } else if (__modetest(Wait4) && __accessed()) {
+        _sp |= ((uint16_t)_mar) << 8;
+        __modeset(Fetch);
     }
 });
 
-add_hl(0x09, bc);
+add_hl (0x09, bc); // add hl, bc
+ld_a_rr(0x0A, bc); // ld a, (bc)
+dec_rr (0x0B, bc); // dec bc
+inc_r  (0x0C, c);  // inc c
+dec_r  (0x0D, c);  // dec c
+ld_m   (0x0E, c);  // ld c, d8
 
-ld_a_rr(0x0A, bc);
-
-dec_rr(0x0B, bc);
-
-inc_r(0x0C, c);
-dec_r(0x0D, c);
-
-ld_m(0x0E, c);
-
+// Rotate right accumulator (rrca)
 op_simple(0x0F, "rrca", {
-    cpu->state.f.c = cpu->state.a & 1;
-    cpu->state.f.h = 0;
-    cpu->state.f.n = 0;
-    cpu->state.f.z = 0;
-
-    __ALURotateRight(&cpu->state.a);
+    __alu_ror(_a);
+    _f.z = 0;
 });
 
+// stop
 op(0x10, 2, "stop 0", {
-    cpu->state.mode = kGBProcessorModeStopped;
+    __modeset(Stopped);
 
-    if (!__GBMemoryManagerRead(cpu->mmu, cpu->state.pc + 1))
-        cpu->state.pc++;
+    if (!__GBMemoryManagerRead(cpu->mmu, _pc + 1)) {
+        _pc++;
+    }
 });
 
-ld_rr(0x11, de);
+ld_rr  (0x11, de); // ld de, d16
+ld_rr_a(0x12, de); // ld a, (de)
+inc_rr (0x13, de); // inc de
+inc_r  (0x14, d);  // inc d
+dec_r  (0x15, d);  // dec d
+ld_m   (0x16, d);  // ld d, d8
 
-ld_rr_a(0x12, de);
-
-inc_rr(0x13, de);
-
-inc_r(0x14, d);
-dec_r(0x15, d);
-
-ld_m(0x16, d);
-
+// Rotate left accumulator through carry (rla)
 op_simple(0x17, "rla", {
-    cpu->state.f.z = 0;
-    cpu->state.f.n = 0;
-    cpu->state.f.h = cpu->state.f.c;
-    cpu->state.f.c = cpu->state.a >> 7;
-
-    cpu->state.a <<= 1;
-    cpu->state.a |= cpu->state.f.h;
-    cpu->state.f.h = 0;
+    __alu_rolc(_a);
+    _f.z = 0;
 });
 
+// Unconditional relative jump (jr s8)
 jr(0x18, "", true);
 
-add_hl(0x19, de);
+add_hl (0x19, de); // add hl, de
+ld_a_rr(0x1A, de); // ld a, (de)
+dec_rr (0x1B, de); // dec de
+inc_r  (0x1C, e);  // inc e
+dec_r  (0x1D, e);  // dec e
+ld_m   (0x1E, e);  // ld e, d8
 
-ld_a_rr(0x1A, de);
-
-dec_rr(0x1B, de);
-
-inc_r(0x1C, e);
-dec_r(0x1D, e);
-
-ld_m(0x1E, e);
-
+// Rotate right accumulator through carry (rra)
 op_simple(0x1F, "rra", {
-    cpu->state.f.z = 0;
-    cpu->state.f.n = 0;
-    cpu->state.f.h = cpu->state.f.c;
-    cpu->state.f.c = cpu->state.a & 1;
-
-    cpu->state.a >>= 1;
-    cpu->state.a |= cpu->state.f.h << 7;
-    cpu->state.f.h = 0;
+    __alu_rorc(_a);
+    _f.z = 0;
 });
 
-jr(0x20, "nz, ", !cpu->state.f.z);
+// Relative jump if non zero (jr nz, s8)
+jr(0x20, "nz, ", !_f.z);
 
+// ld hl, d16
 ld_rr(0x21, hl);
 
+// Write a to (hl) and increment hl
 op_wait(0x22, 1, "ld (hl+), a", {
-    __GBProcessorWrite(cpu, cpu->state.hl++, cpu->state.a);
-}, {
-    // We don't need to do anything after
-});
+    __mmu_write(cpu, _hl, _a);
+}, { _hl++; });
 
-inc_rr(0x23, hl);
+inc_rr(0x23, hl); // inc hl
+inc_r (0x24, h);  // inc h
+dec_r (0x25, h);  // dec h
+ld_m  (0x26, h);  // ld h, d8
 
-inc_r(0x24, h);
-dec_r(0x25, h);
-
-ld_m(0x26, h);
-
+// Decimal adjust accumulator.
 op_simple(0x27, "daa", {
-    if (cpu->state.f.n) {
-        if (cpu->state.f.c)
-            cpu->state.a -= 0x60;
-
-        if (cpu->state.f.h)
-            cpu->state.a -= 0x06;
+    // Here, we use half carry and carry along with
+    //   the subtraction (N) flag to determine how
+    //   to adjust the accumulator value.
+    if (_f.n) {
+        if (_f.c) { _a -= 0x60; }
+        if (_f.h) { _a -= 0x06; }
     } else {
-        if (cpu->state.f.c || cpu->state.a > 0x99)
+        if (_f.c || _a > 0x99)
         {
-            cpu->state.a += 0x60;
-            cpu->state.f.c = 1;
+            _a += 0x60;
+            _f.c = 1;
         }
 
-        if (cpu->state.f.h || (cpu->state.a & 0x0F) > 0x09)
-            cpu->state.a += 0x06;
+        if (_f.h || (_a & 0x0F) > 0x09) {
+            _a += 0x06;
+        }
     }
 
-    cpu->state.f.z = !cpu->state.a;
-    cpu->state.f.h = 0;
+    // TODO: How is the carry flag affected by this operation?
+    _f.z = !_a;
+    _f.h = 0;
 });
 
-jr(0x28, "z, ", cpu->state.f.z);
+// Relative jump if zero (jr z, s8)
+jr(0x28, "z, ", _f.z);
 
+// Double hl pair (add hl, hl)
 add_hl(0x29, hl);
 
+// Load a from (hl) and increment hl
 op_hl(0x2A, "ld a, (hl+)", {
-    cpu->state.a = cpu->state.mdr;
-    cpu->state.hl++;
+    _a = _mdr;
+    _hl++;
 });
 
-dec_rr(0x2B, hl);
+dec_rr(0x2B, hl); // dec hl
+inc_r (0x2C, l);  // inc l
+dec_r (0x2D, l);  // dec l
+ld_m  (0x2E, l);  // ld l, d8
 
-inc_r(0x2C, l);
-dec_r(0x2D, l);
-
-ld_m(0x2E, l);
-
+// Complement accumulator
 op_simple(0x2F, "cpl", {
-    cpu->state.a = ~cpu->state.a;
-
-    cpu->state.f.h = 1;
-    cpu->state.f.n = 1;
+    _a = __alu_1_cmpl(_a);
+    _f.h = 1;
+    _f.n = 1;
 });
 
-jr(0x30, "nc, ", !cpu->state.f.c);
+// Relative jump if not carry (jr nc, s8)
+jr(0x30, "nc, ", !_f.c);
 
+// ld sp, d16
 ld_rr(0x31, sp);
 
+// Write a to (hl) and decrement hl
 op_wait(0x32, 1, "ld (hl-), a", {
-    __GBProcessorWrite(cpu, cpu->state.hl--, cpu->state.a);
-}, {
-    // We don't need to do anything after
-});
+    __mmu_write(cpu, _hl, _a);
+}, { _hl--; });
 
+// inc sp
 inc_rr(0x33, sp);
 
+// Increment value at (hl)
 op_wait2(0x34, 1, "inc (hl)", {
-    __GBProcessorRead(cpu, cpu->state.hl);
+    __mmu_read(cpu, _hl);
 }, {
-    uint8_t carry = cpu->state.f.c;
-    uint8_t one = 1;
+    uint8_t carry = _f.c;
+    __alu_add8(cpu, _mdr, 1, 0);
+    _f.c = carry;
 
-    __ALUAdd8(cpu, &cpu->state.mdr, one, 0);
-    cpu->state.f.c = carry;
+    __mmu_write(cpu, _hl, _mdr);
+}, { /* Just stall here */ });
 
-    __GBProcessorWrite(cpu, cpu->state.hl, cpu->state.mdr);
-}, {
-    // We're done now
-});
-
+// Decrement value at (hl)
 op_wait2(0x35, 1, "dec (hl)", {
-    __GBProcessorRead(cpu, cpu->state.hl);
+    __mmu_read(cpu, _hl);
 }, {
-    uint8_t carry = cpu->state.f.c;
-    uint8_t one = 1;
+    uint8_t carry = _f.c;
+    __alu_sub8(cpu, _mdr, 1, 0);
+    _f.c = carry;
 
-    __ALUSub8(cpu, &cpu->state.mdr, one, 0);
-    cpu->state.f.c = carry;
+    __mmu_write(cpu, _hl, _mdr);
+}, { /* Just stall here */ });
 
-    __GBProcessorWrite(cpu, cpu->state.hl, cpu->state.mdr);
-}, {
-    // We're done now
-});
-
+// Store literal value at (hl)
 op_wait2(0x36, 2, "ld (hl), " d8, {
-    __GBProcessorReadArgument(cpu);
+    __mmu_read_arg(cpu);
 }, {
-    __GBProcessorWrite(cpu, cpu->state.hl, cpu->state.mdr);
-}, {
-    // We're done now
-});
+    __mmu_write(cpu, _hl, _mdr);
+}, { /* Just stall here */ });
 
+// Set carry flag
 op_simple(0x37, "scf", {
-    cpu->state.f.c = 1;
-
-    cpu->state.f.h = 0;
-    cpu->state.f.n = 0;
+    __set_flags(_f.z, 0, 0, 1);
 });
 
-jr(0x38, "c, ", cpu->state.f.c);
+// Relative jump if carry (jr c, s8)
+jr(0x38, "c, ", _f.c);
 
+// Add hl to sp (add hl, sp)
 add_hl(0x39, sp);
 
+// Load a from (hl) and decrement hl
 op_hl(0x3A, "ld a, (hl-)", {
-    cpu->state.a = cpu->state.mdr;
-    cpu->state.hl--;
+    _a = _mdr;
+    _hl--;
 });
 
-dec_rr(0x3B, sp);
+dec_rr(0x3B, sp); // dec sp
+inc_r (0x3C, a);  // inc a
+dec_r (0x3D, a);  // dec a
+ld_m  (0x3E, a);  // ld a, d8
 
-inc_r(0x3C, a);
-dec_r(0x3D, a);
-
-ld_m(0x3E, a);
-
+// Clear carry flag
 op_simple(0x3F, "ccf", {
-    cpu->state.f.c = ~cpu->state.f.c;
-
-    cpu->state.f.h = 0;
-    cpu->state.f.n = 0;
+    __set_flags(_f.z, 0, 0, !_f.c);
 });
 
-ld_r(0x40, b, b);
-ld_r(0x41, b, c);
-ld_r(0x42, b, d);
-ld_r(0x43, b, e);
-ld_r(0x44, b, h);
-ld_r(0x45, b, l);
-ld_r_hl(0x46, b);
-ld_r(0x47, b, a);
+// ld b, <reg>
+ld_r(0x40, b, b); ld_r(0x41, b, c); ld_r(0x42, b, d); ld_r(0x43, b, e);
+ld_r(0x44, b, h); ld_r(0x45, b, l); ld_r_hl(0x46, b); ld_r(0x47, b, a);
 
-ld_r(0x48, c, b);
-ld_r(0x49, c, c);
-ld_r(0x4A, c, d);
-ld_r(0x4B, c, e);
-ld_r(0x4C, c, h);
-ld_r(0x4D, c, l);
-ld_r_hl(0x4E, c);
-ld_r(0x4F, c, a);
+// ld c, <reg>
+ld_r(0x48, c, b); ld_r(0x49, c, c); ld_r(0x4A, c, d); ld_r(0x4B, c, e);
+ld_r(0x4C, c, h); ld_r(0x4D, c, l); ld_r_hl(0x4E, c); ld_r(0x4F, c, a);
 
-ld_r(0x50, d, b);
-ld_r(0x51, d, c);
-ld_r(0x52, d, d);
-ld_r(0x53, d, e);
-ld_r(0x54, d, h);
-ld_r(0x55, d, l);
-ld_r_hl(0x56, d);
-ld_r(0x57, d, a);
+// ld d, <reg>
+ld_r(0x50, d, b); ld_r(0x51, d, c); ld_r(0x52, d, d); ld_r(0x53, d, e);
+ld_r(0x54, d, h); ld_r(0x55, d, l); ld_r_hl(0x56, d); ld_r(0x57, d, a);
 
-ld_r(0x58, e, b);
-ld_r(0x59, e, c);
-ld_r(0x5A, e, d);
-ld_r(0x5B, e, e);
-ld_r(0x5C, e, h);
-ld_r(0x5D, e, l);
-ld_r_hl(0x5E, e);
-ld_r(0x5F, e, a);
+// ld e, <reg>
+ld_r(0x58, e, b); ld_r(0x59, e, c); ld_r(0x5A, e, d); ld_r(0x5B, e, e);
+ld_r(0x5C, e, h); ld_r(0x5D, e, l); ld_r_hl(0x5E, e); ld_r(0x5F, e, a);
 
-ld_r(0x60, h, b);
-ld_r(0x61, h, c);
-ld_r(0x62, h, d);
-ld_r(0x63, h, e);
-ld_r(0x64, h, h);
-ld_r(0x65, h, l);
-ld_r_hl(0x66, h);
-ld_r(0x67, h, a);
+// ld h, <reg>
+ld_r(0x60, h, b); ld_r(0x61, h, c); ld_r(0x62, h, d); ld_r(0x63, h, e);
+ld_r(0x64, h, h); ld_r(0x65, h, l); ld_r_hl(0x66, h); ld_r(0x67, h, a);
 
-ld_r(0x68, l, b);
-ld_r(0x69, l, c);
-ld_r(0x6A, l, d);
-ld_r(0x6B, l, e);
-ld_r(0x6C, l, h);
-ld_r(0x6D, l, l);
-ld_r_hl(0x6E, l);
-ld_r(0x6F, l, a);
+// ld l, <reg>
+ld_r(0x68, l, b); ld_r(0x69, l, c); ld_r(0x6A, l, d); ld_r(0x6B, l, e);
+ld_r(0x6C, l, h); ld_r(0x6D, l, l); ld_r_hl(0x6E, l); ld_r(0x6F, l, a);
 
-ld_hl(0x70, b);
-ld_hl(0x71, c);
-ld_hl(0x72, d);
-ld_hl(0x73, e);
-ld_hl(0x74, h);
-ld_hl(0x75, l);
+// ld (hl, <reg>
+ld_hl(0x70, b); ld_hl(0x71, c); ld_hl(0x72, d); ld_hl(0x73, e);
+ld_hl(0x74, h); ld_hl(0x75, l);
 
 op(0x76, 1, "halt", {
-    cpu->state.mode = kGBProcessorModeHalted;
+    __modeset(Halted);
 
+    // TODO: There is a hardware bug in this instruction that
+    //   is meant to stall once if IME is not set and an interrupt is pending.
     cpu->state.enableIME = cpu->state.ime;
     cpu->state.ime = true;
 });
 
 ld_hl(0x77, a);
 
-ld_r(0x78, a, b);
-ld_r(0x79, a, c);
-ld_r(0x7A, a, d);
-ld_r(0x7B, a, e);
-ld_r(0x7C, a, h);
-ld_r(0x7D, a, l);
-ld_r_hl(0x7E, a);
-ld_r(0x7F, a, a);
+// ld a, <reg>
+ld_r(0x78, a, b); ld_r(0x79, a, c); ld_r(0x7A, a, d); ld_r(0x7B, a, e);
+ld_r(0x7C, a, h); ld_r(0x7D, a, l); ld_r_hl(0x7E, a); ld_r(0x7F, a, a);
 
-add(0x80, b);
-add(0x81, c);
-add(0x82, d);
-add(0x83, e);
-add(0x84, h);
-add(0x85, l);
+// add a, <reg>
+add(0x80, b); add(0x81, c); add(0x82, d); add(0x83, e);
+add(0x84, h); add(0x85, l); /*   0x86  */ add(0x87, a);
+op_hl(0x86, "add a, (hl)", { __alu_add8(cpu, _a, _mdr, 0); });
 
-op_hl(0x86, "add a, (hl)", {
-    __ALUAdd8(cpu, &cpu->state.a, cpu->state.mdr, 0);
-});
+// adc a, <reg>
+adc(0x88, b); adc(0x89, c); adc(0x8A, d); adc(0x8B, e);
+adc(0x8C, h); adc(0x8D, l); /*   0x8E  */ adc(0x8F, a);
+op_hl(0x8E, "adc a, (hl)", { __alu_add8(cpu, _a, _mdr, _f.c); });
 
-add(0x87, a);
+// sub a, <reg>
+sub(0x90, b); sub(0x91, c); sub(0x92, d); sub(0x93, e);
+sub(0x94, h); sub(0x95, l); /*   0x96  */ sub(0x97, a);
+op_hl(0x96, "sub a, (hl)", { __alu_sub8(cpu, _a, _mdr, 0); });
 
-adc(0x88, b);
-adc(0x89, c);
-adc(0x8A, d);
-adc(0x8B, e);
-adc(0x8C, h);
-adc(0x8D, l);
+// sbc a, <reg>
+sbc(0x98, b); sbc(0x99, c); sbc(0x9A, d); sbc(0x9B, e);
+sbc(0x9C, h); sbc(0x9D, l); /*   0x9E  */ sbc(0x9F, a);
+op_hl(0x9E, "sbc a, (hl)", { __alu_sub8(cpu, _a, _mdr, !_f.c); });
 
-op_hl(0x8E, "adc a, (hl)", {
-    __ALUAdd8(cpu, &cpu->state.a, cpu->state.mdr, cpu->state.f.c);
-});
+// and <reg>
+and(0xA0, b); and(0xA1, c); and(0xA2, d); and(0xA3, e);
+and(0xA4, h); and(0xA5, l); /*   0xA6  */ and(0xA7, a);
+op_alu_hl(0xA6, "and", __alu_and8);
 
-adc(0x8F, a);
+// xor <reg>
+xor(0xA8, b); xor(0xA9, c); xor(0xAA, d); xor(0xAB, e);
+xor(0xAC, h); xor(0xAD, l); /*   0xAE  */ xor(0xAF, a);
+op_alu_hl(0xAE, "xor", __alu_xor8);
 
-sub(0x90, b);
-sub(0x91, c);
-sub(0x92, d);
-sub(0x93, e);
-sub(0x94, h);
-sub(0x95, l);
+// or <reg>
+or(0xB0, b); or(0xB1, b); or(0xB2, b); or(0xB3, b);
+or(0xB4, b); or(0xB5, b); /*  0xB6  */ or(0xB7, b);
+op_alu_hl(0xB6, "or", __alu_or8);
 
-op_hl(0x96, "sub a, (hl)", {
-    __ALUSub8(cpu, &cpu->state.a, cpu->state.mdr, 0);
-});
+// cp <reg>
+cmp(0xB8, b); cmp(0xB9, c); cmp(0xBA, d); cmp(0xBB, e);
+cmp(0xBC, h); cmp(0xBD, l); /*   0xBE  */ cmp(0xBF, a);
+op_alu_hl(0xBE, "cp", __alu_cmp);
 
-sub(0x97, a);
+// Return if not zero (ret nz)
+ret(0xC0, "nz", !_f.z);
 
-sbc(0x98, b);
-sbc(0x99, c);
-sbc(0x9A, d);
-sbc(0x9B, e);
-sbc(0x9C, h);
-sbc(0x9D, l);
-
-op_hl(0x9E, "sbc a, (hl)", {
-    __ALUSub8(cpu, &cpu->state.a, cpu->state.mdr, cpu->state.f.c);
-});
-
-sbc(0x9F, a);
-
-and(0xA0, b);
-and(0xA1, c);
-and(0xA2, d);
-and(0xA3, e);
-and(0xA4, h);
-and(0xA5, l);
-
-alu_op_hl(0xA6, "and", __ALUAnd8);
-
-and(0xA7, a);
-
-xor(0xA8, b);
-xor(0xA9, c);
-xor(0xAA, d);
-xor(0xAB, e);
-xor(0xAC, h);
-xor(0xAD, l);
-
-alu_op_hl(0xAE, "xor", __ALUXor8);
-
-xor(0xAF, a);
-
-or(0xB0, b);
-or(0xB1, c);
-or(0xB2, d);
-or(0xB3, e);
-or(0xB4, h);
-or(0xB5, l);
-
-alu_op_hl(0xB6, "or", __ALUOr8);
-
-or(0xB7, a);
-
-cmp(0xB8, b);
-cmp(0xB9, c);
-cmp(0xBA, d);
-cmp(0xBB, e);
-cmp(0xBC, h);
-cmp(0xBD, l);
-
-alu_op_hl(0xBE, "cp", __ALUCP8);
-
-cmp(0xBF, a);
-
-ret(0xC0, "nz", !cpu->state.f.z);
-
+// pop bc
 pop(0xC1, bc);
-jmp(0xC2, "nz, ", !cpu->state.f.z);
-jmp(0xC3, "", true);
-call(0xC4, "nz, ", !cpu->state.f.z);
 
+// Absolute jump if non zero (jp nz, a16)
+jmp(0xC2, "nz, ", !_f.z);
+
+// Unconditional absolute jump (jp a16)
+jmp(0xC3, "", true);
+
+// Call subroutine if non zero (call nz, a16)
+call(0xC4, "nz, ", !_f.z);
+
+// push bc
 push(0xC5, bc);
 
-op_arg(0xC6, "add a, " d8, {
-    __ALUAdd8(cpu, &cpu->state.a, cpu->state.mdr, 0);
-});
+// Add 8-bit constant
+op_arg(0xC6, "add a, " d8, { __alu_add8(cpu, _a, _mdr, 0); });
 
+// Reset to vector 0x00 (rst 0x00)
 rst(0xC7, 0x00);
-ret(0xC8, "z", cpu->state.f.z);
 
-op_wait2_stall(0xC9, 1, "ret", {
-    __GBProcessorRead(cpu, cpu->state.sp + 0);
-}, {
-    cpu->state.pc = cpu->state.mdr;
+// Return from subroutine if zero (ret z)
+ret(0xC8, "z", _f.z);
 
-    __GBProcessorRead(cpu, cpu->state.sp + 1);
+// Unconditional return from subroutine
+op_wait2_stall(0xC9, 1, "ret", { __mmu_read(cpu, _sp); }, {
+    _pc = _mdr;
+    __mmu_read(cpu, _sp + 1);
 }, {
-    cpu->state.pc |= (cpu->state.mdr << 8);
-    cpu->state.sp += 2;
+    _pc |= (uint16_t)(_mdr << 8);
+    _sp += 2;
 });
 
-jmp(0xCA, "z, ", cpu->state.f.z);
+// Absolute jump if zero (jp z, a16)
+jmp(0xCA, "z, ", _f.z);
 
 op(0xCB, 1, "cb.", { /* This is the prefix opcode */ });
 
-call(0xCC, "z, ", cpu->state.f.z);
+// Call subroutine if zero (call z, a16)
+call(0xCC, "z, ", _f.z);
+
+// Unconditional call subroutine (call a16)
 call(0xCD, "", true);
 
-op_arg(0xCE, "adc a, " d8, {
-    __ALUAdd8(cpu, &cpu->state.a, cpu->state.mdr, cpu->state.f.c);
-});
+// Add 8-bit constant with carry
+op_arg(0xCE, "adc a, " d8, { __alu_add8(cpu, _a, _mdr, _f.c); });
 
+// Reset to vector 0x08 (rst 0x08)
 rst(0xCF, 0x08);
-ret(0xD0, "nc", !cpu->state.f.c);
+
+// Return from subroutine if not carry (ret nc)
+ret(0xD0, "nc", !_f.c);
+
+// pop de
 pop(0xD1, de);
-jmp(0xD2, "nc, ", !cpu->state.f.c);
+
+// Absolute jump if not carry (jp nc, a16)
+jmp(0xD2, "nc, ", !_f.c);
+
+// Undefined 0xD3
 udef(0xD3);
-call(0xD4, "nc, ", !cpu->state.f.c);
+
+// Call subroutine if not carry (call nc, a16)
+call(0xD4, "nc, ", !_f.c);
+
+// push de
 push(0xD5, de);
 
-op_arg(0xD6, "sub " d8, {
-    __ALUSub8(cpu, &cpu->state.a, cpu->state.mdr, 0);
-});
+// Subtract 8-bit constant
+op_arg(0xD6, "sub " d8, { __alu_sub8(cpu, _a, _mdr, 0); });
 
+// Reset to vector 0x10 (rst 0x10)
 rst(0xD7, 0x10);
-ret(0xD8, "c", cpu->state.f.c);
 
+// Return from subroutine if carry (ret c)
+ret(0xD8, "c", _f.c);
+
+// Return from subroutine and enable interrupts
 op_wait2_stall(0xD9, 1, "reti", {
-    __GBProcessorRead(cpu, cpu->state.sp + 0);
-
     cpu->state.enableIME = true;
+    __mmu_read(cpu, _sp);
 }, {
-    cpu->state.pc = cpu->state.mdr;
-
-    __GBProcessorRead(cpu, cpu->state.sp + 1);
+    _pc = _mdr;
+    __mmu_read(cpu, _sp + 1);
 }, {
-    cpu->state.pc |= (cpu->state.mdr << 8);
-    cpu->state.sp += 2;
+    _pc |= (uint16_t)(_mdr << 8);
+    _sp += 2;
 });
 
-jmp(0xDA, "c, ", cpu->state.f.c);
+// Absolute jump if carry (jp c, a16)
+jmp(0xDA, "c, ", _f.c);
+
+// Undefined 0xDB
 udef(0xDB);
 
-call(0xDC, "c, ", cpu->state.f.c);
+// Call subroutine if carry (call c, a16)
+call(0xDC, "c, ", _f.c);
+
+// Undefined 0xDD
 udef(0xDD);
 
-op_arg(0xDE, "sbc " d8, {
-    __ALUSub8(cpu, &cpu->state.a, cpu->state.mdr, cpu->state.f.c);
-});
+// Subtract 8-bit constant
+op_arg(0xDE, "sbc " d8, { __alu_sub8(cpu, _a, _mdr, !_f.c); });
 
+// Reset to vector 0x18 (rst 0x18)
 rst(0xDF, 0x18);
 
-op_wait2(0xE0, 2, "ld " d8 "(" dIO "), a", {
-    __GBProcessorReadArgument(cpu);
-}, {
-    __GBProcessorWrite(cpu, 0xFF00 + cpu->state.mdr, cpu->state.a);
-}, {
-    // We're done
-});
+// Store accumulator to high address (0xFF00 | immediate 8-bit value)
+op_wait2(0xE0, 2, "ld " d8 "(" dIO "), a", { __mmu_read_arg(cpu); }, {
+    __mmu_write(cpu, 0xFF00 | _mdr, _a);
+}, { /* stall */ });
 
+// pop hl
 pop(0xE1, hl);
 
+// Store accumulator to high address (0xFF | C register)
 op_wait(0xE2, 1, "ld c(" dIO "), a", {
-    __GBProcessorWrite(cpu, 0xFF00 + cpu->state.c, cpu->state.a);
-}, {
-    // We're done
-});
+    __mmu_write(cpu, 0xFF00 | cpu->state.c, _a);
+}, { /* stall */ });
 
+// Undefined 0xE3
 udef(0xE3);
+
+// Undefined 0xE4
 udef(0xE4);
+
+// push hl
 push(0xE5, hl);
 
-alu_op_arg(0xE6, "and", __ALUAnd8);
+// Logical AND 8-bit constant
+op_alu_arg(0xE6, "and", __alu_and8);
 
+// Reset to vector 0xE7 (rst 0x20)
 rst(0xE7, 0x20);
 
-op_wait3_stall(0xE8, 1, "add sp, " d8, {
-    __GBProcessorReadArgument(cpu);
-}, {
-    __ALUAdd16(cpu, &cpu->state.sp, __ALUSignExtend(cpu->state.mdr), 0);
-}, {
-    __GBProcessorRead(cpu, 0x0000);
-    cpu->state.f.z = 0;
-}, {
-    // Stalling more...
-});
+// Add a signed 8-bit offset to the stack pointer.
+// Effectively, grow or shrink the stack by -127 to 128 bytes.
+op_wait3_stall(0xE8, 1, "add sp, " d8, { __mmu_read_arg(cpu); }, {
+    __alu_add16_8(cpu, _sp, _mdr);
+}, { __mmu_read(cpu, 0x0000); }, { /* stall */ });
 
-op_simple(0xE9, "jp (hl)", {
-    cpu->state.pc = cpu->state.hl;
-});
+// Unconditionally jump to the value in hl
+op_simple(0xE9, "jp hl", { _pc = _hl; });
 
-op_wait3(0xEA, 3, "ld (" d16 "), a", {
-    __GBProcessorReadArgument(cpu);
+// Store the value of the accumulator into memory at a 16-bit constant address
+op_wait3(0xEA, 3, "ld (" d16 "), a", { __mmu_read_arg(cpu); }, {
+    _data = _mdr;
+    __mmu_read_arg(cpu);
 }, {
-    cpu->state.data = cpu->state.mdr;
+    uint16_t addr = (_mdr << 8) | _data;
+    __mmu_write(cpu, addr, _a);
+}, { /* stall */ });
 
-    __GBProcessorReadArgument(cpu);
-}, {
-    __GBProcessorWrite(cpu, cpu->state.data | ((cpu->state.mdr) << 8), cpu->state.a);
-}, {
-    // That's it
-});
-
+// Undefined 0xEB, 0xEC, 0xED
 udef(0xEB);
 udef(0xEC);
 udef(0xED);
 
-alu_op_arg(0xEE, "xor", __ALUXor8);
+// Logical XOR with 8-bit constant
+op_alu_arg(0xEE, "xor", __alu_xor8);
 
+// Reset to vector 0x28 (rst 0x28)
 rst(0xEF, 0x28);
 
-op_wait2(0xF0, 2, "ld a, " d8 "(" dIO ")", {
-    __GBProcessorReadArgument(cpu);
-}, {
-    __GBProcessorRead(cpu, 0xFF00 + cpu->state.mdr);
-}, {
-    cpu->state.a = cpu->state.mdr;
-});
+// Load accumulator from high address (0xFF00 | immidiate 8-bit value)
+op_wait2(0xF0, 2, "ld a, " d8 "(" dIO ")", { __mmu_read_arg(cpu); }, {
+    __mmu_read(cpu, 0xFF00 | _mdr);
+}, { _a = _mdr; });
 
+// Pop accumulator and flags from the stack
 op_wait2_stall(0xF1, 1, "pop af", {
-    __GBProcessorRead(cpu, cpu->state.sp + 0);
+    __mmu_read(cpu, _sp);
 }, {
-    cpu->state.f.reg = cpu->state.mdr & 0xF0;
-
-    __GBProcessorRead(cpu, cpu->state.sp + 1);
+    _f.reg = _mdr & 0xF0;
+    __mmu_read(cpu, _sp + 1);
 }, {
-    cpu->state.a = cpu->state.mdr;
-    cpu->state.sp += 2;
+    _a = _mdr;
+    _sp += 2;
 });
 
+// Load accumulator from high address (0xFF00 | C register)
 op_wait(0xF2, 1, "ld a, c(" dIO ")", {
-    __GBProcessorRead(cpu, 0xFF00 + cpu->state.c);
-}, {
-    cpu->state.a = cpu->state.mdr;
-});
+    __mmu_read(cpu, 0xFF00 | cpu->state.c);
+}, { _a = _mdr; });
 
+// Disable interrupts
 op_simple(0xF3, "di", {
     //printf("Interrupts disabled.\n");
-
     cpu->state.ime = false;
 });
 
+// Undefined 0xF4
 udef(0xF4);
 
+// Push accumulator and flags to the stack
 op_wait2_stall(0xF5, 1, "push af", {
-    __GBProcessorWrite(cpu, cpu->state.sp - 1, cpu->state.a);
+    __mmu_write(cpu, _sp - 1, _a);
 }, {
-    __GBProcessorWrite(cpu, cpu->state.sp - 2, cpu->state.f.reg & 0xF0);
-}, {
-    cpu->state.sp -= 2;
-});
+    __mmu_write(cpu, _sp - 2, _f.reg & 0xF0);
+}, { _sp -= 2; });
 
-alu_op_arg(0xF6, "or", __ALUOr8);
+// Logical OR with 8-bit constant
+op_alu_arg(0xF6, "or", __alu_or8);
 
+// Reset to vector 0x30 (rst 0x30)
 rst(0xF7, 0x30);
 
-op_wait2_stall(0xF8, 2, "ld hl, " d8 "(sp)", {
-    __GBProcessorReadArgument(cpu);
+// Add a signed 8-bit offset to the stack pointer.
+// Store the result in hl.
+op_wait2_stall(0xF8, 2, "ld hl, " d8 "(sp)", { __mmu_read_arg(cpu); }, {
+    _hl = _sp;
+    __alu_add16_8(cpu, _hl, _mdr);
+}, { /* stall */ });
+
+// Set stack pointer from hl
+op_stall(0xF9, 1, "ld sp, hl", { _sp = _hl; });
+
+// Load the value of the accumulator from memory at a 16-bit constant address
+op_wait3(0xFA, 3, "ld a, (" d16 ")", { __mmu_read_arg(cpu); }, {
+    _data = _mdr;
+    __mmu_read_arg(cpu);
 }, {
-    uint16_t sp = cpu->state.sp;
+    uint16_t addr = (_mdr << 8) | _data;
+    __mmu_read(cpu, addr);
+}, { _a = _mdr; });
 
-    uint16_t val = __ALUSignExtend(cpu->state.mdr);
-
-    __ALUAdd8(cpu, (uint8_t *)&cpu->state.hl, val & 0xFF, 0);
-    uint8_t h = cpu->state.f.h;
-    uint8_t c = cpu->state.f.c;
-
-    __ALUAdd8(cpu, ((uint8_t *)&cpu->state.hl) + 1, val >> 8, cpu->state.f.c);
-    cpu->state.f.h = h;
-    cpu->state.f.c = c;
-
-    //__ALUAdd8(cpu, (uint8_t *)(to) + 0, from & 0xFF, carry);
-    //__ALUAdd8(cpu, (uint8_t *)(to) + 1, from >> 8, cpu->state.f.c);
-    //__ALUAdd16(cpu, &cpu->state.sp, __ALUSignExtend(cpu->state.mdr), 0);
-
-    cpu->state.hl = cpu->state.sp;
-    cpu->state.sp = sp;
-    cpu->state.f.z = 0;
-}, {
-    // That's it
-});
-
-op_stall(0xF9, 1, "ld sp, hl", {
-    cpu->state.sp = cpu->state.hl;
-});
-
-op_wait3(0xFA, 3, "ld a, (" d16 ")", {
-    __GBProcessorReadArgument(cpu);
-}, {
-    cpu->state.a = cpu->state.mdr;
-
-    __GBProcessorReadArgument(cpu);
-}, {
-    __GBProcessorRead(cpu, cpu->state.a | (cpu->state.mdr << 8));
-}, {
-    cpu->state.a = cpu->state.mdr;
-});
-
+// Enable interrupts
 op_simple(0xFB, "ei", {
     //printf("Interrupts enabled.\n");
-
     cpu->state.enableIME = true;
 });
 
+// Undefined 0xFC, 0xFD
 udef(0xFC);
 udef(0xFD);
 
-alu_op_arg(0xFE, "cp", __ALUCP8);
+// Compare with 8-bit constant
+op_alu_arg(0xFE, "cp", __alu_cmp);
 
+// Reset to vector 0x38 (rst 0x38)
 rst(0xFF, 0x38);
 
 #pragma mark - Prefixed Instructions
 
-#define rlc(code, reg)                                                      \
-    op_pre_simple(code, "rlc " #reg, {                                      \
-        __ALURotateLeft(&cpu->state.reg);                                   \
-                                                                            \
-        cpu->state.f.z = !cpu->state.reg;                                   \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = 0;                                                 \
-        cpu->state.f.c = cpu->state.reg & 1;                                \
+// Rotate register left
+#define rlc(code, r) op_pre_simple(code, "rlc " #r, { __alu_rol(_reg(r)); })
+
+// Rotate value at (hl) left
+#define rlc_hl(code) op_pre_hl(code, "rlc (hl)", { __alu_rol(_mdr); })
+
+// Rotate register right
+#define rrc(code, r) op_pre_simple(code, "rrc " #r, { __alu_ror(_reg(r)); })
+
+// Rotate value at (hl) right
+#define rrc_hl(code) op_pre_hl(code, "rrc (hl)", { __alu_ror(_mdr); })
+
+// Rotate register left through carry
+#define rl(code, r) op_pre_simple(code, "rl " #r, { __alu_rolc(_reg(r)); })
+
+// Rotate value at (hl) left through carry
+#define rl_hl(code) op_pre_hl(code, "rl (hl)", { __alu_rolc(_mdr); })
+
+// Rotate register right through carry
+#define rr(code, r) op_pre_simple(code, "rr " #r, { __alu_rorc(_reg(r)); })
+
+// Rotate value at (hl) right through carry
+#define rr_hl(code) op_pre_hl(code, "rr (hl)", { __alu_rorc(_mdr); })
+
+// Shift register left
+#define sla(code, r)                                        \
+    op_pre_simple(code, "sla " #r, {                        \
+        __set_flags(!(_reg(r) & 0x7F), 0, 0, _reg(r) >> 7); \
+        _reg(r) <<= 1;                                      \
     })
 
-#define rlc_hl(code)                                                        \
-    op_pre_hl(code, "rlc (hl)", {                                           \
-        __ALURotateLeft(&cpu->state.mdr);                                   \
-                                                                            \
-        cpu->state.f.z = !cpu->state.mdr;                                   \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = 0;                                                 \
-        cpu->state.f.c = cpu->state.mdr & 1;                                \
+// Shift left value at (hl)
+#define sla_hl(code)                                        \
+    op_pre_hl(code, "sla (hl)", {                           \
+        __set_flags(!(_mdr & 0x7F), 0, 0, _mdr >> 7);       \
+        _mdr <<= 1;                                         \
     })
 
-#define rrc(code, reg)                                                      \
-    op_pre_simple(code, "rrc " #reg, {                                      \
-        cpu->state.f.z = !cpu->state.reg;                                   \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = 0;                                                 \
-        cpu->state.f.c = cpu->state.reg & 1;                                \
-                                                                            \
-        __ALURotateRight(&cpu->state.reg);                                  \
+// Shift right register, preserving the high bit.
+#define sra(code, r)                                        \
+    op_pre_simple(code, "sra " #r, {                        \
+        __set_flags(!(_reg(r) & 0xFE), 0, 0, _reg(r) & 1);  \
+                                                            \
+        _reg(r) >>= 1;                                      \
+        _reg(r) |= (_reg(r) & 0x40) << 1;                   \
     })
 
-#define rrc_hl(code)                                                        \
-    op_pre_hl(code, "rrc (hl)", {                                           \
-        cpu->state.f.z = !cpu->state.mdr;                                   \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = 0;                                                 \
-        cpu->state.f.c = cpu->state.mdr & 1;                                \
-                                                                            \
-        __ALURotateRight(&cpu->state.mdr);                                  \
+// Shift right value at (hl), preserving the high bit.
+#define sra_hl(code)                                        \
+    op_pre_hl(code, "sra (hl)", {                           \
+        __set_flags(!(_mdr & 0xFE), 0, 0, _mdr & 1);        \
+                                                            \
+        _mdr >>= 1;                                         \
+        _mdr |= (_mdr & 0x40) << 1;                         \
     })
 
-#define rl(code, reg)                                                       \
-    op_pre_simple(code, "rl " #reg, {                                       \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = cpu->state.f.c;                                    \
-        cpu->state.f.c = cpu->state.reg >> 7;                               \
-                                                                            \
-        cpu->state.reg <<= 1;                                               \
-        cpu->state.reg |= cpu->state.f.h;                                   \
-        cpu->state.f.z = !cpu->state.reg;                                   \
-        cpu->state.f.h = 0;                                                 \
+// Swap high and low 4 bits of register
+#define swap(code, r)                                       \
+    op_pre_simple(code, "swap " #r, {                       \
+        _reg(r) = ((_reg(r)) >> 4) | ((_reg(r)) << 4);      \
+        __set_flags(!_reg(r), 0, 0, 0);                     \
     })
 
-#define rl_hl(code)                                                         \
-    op_pre_hl(code, "rl (hl)", {                                            \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = cpu->state.f.c;                                    \
-        cpu->state.f.c = cpu->state.mdr >> 7;                               \
-                                                                            \
-        cpu->state.mdr <<= 1;                                               \
-        cpu->state.mdr |= cpu->state.f.h;                                   \
-        cpu->state.f.z = !cpu->state.mdr;                                   \
-        cpu->state.f.h = 0;                                                 \
+// Swap high and low 4 bits of value at (hl)
+#define swap_hl(code)                                       \
+    op_pre_hl(code, "swap (hl)", {                          \
+        _mdr = ((_mdr) >> 4) | ((_mdr) << 4);               \
+        __set_flags(!_mdr, 0, 0, 0);                        \
     })
 
-#define rr(code, reg)                                                       \
-    op_pre_simple(code, "rr " #reg, {                                       \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = cpu->state.f.c;                                    \
-        cpu->state.f.c = cpu->state.reg & 1;                                \
-                                                                            \
-        cpu->state.reg >>= 1;                                               \
-        cpu->state.reg |= cpu->state.f.h << 7;                              \
-        cpu->state.f.z = !cpu->state.reg;                                   \
-        cpu->state.f.h = 0;                                                 \
+// Logical shift register right
+#define srl(code, r)                                        \
+    op_pre_simple(code, "srl " #r, {                        \
+        __set_flags(!(_reg(r) & 0xFE), 0, 0, _reg(r) & 1);  \
+        _reg(r) >>= 1;                                      \
     })
 
-#define rr_hl(code)                                                         \
-    op_pre_hl(code, "rr (hl)", {                                            \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = cpu->state.f.c;                                    \
-        cpu->state.f.c = cpu->state.mdr & 1;                                \
-                                                                            \
-        cpu->state.mdr >>= 1;                                               \
-        cpu->state.mdr |= cpu->state.f.h << 7;                              \
-        cpu->state.f.z = !cpu->state.mdr;                                   \
-        cpu->state.f.h = 0;                                                 \
+// Logical shift value at (hl) right
+#define srl_hl(code)                                        \
+    op_pre_hl(code, "srl (hl)", {                           \
+        __set_flags(!(_mdr & 0xFE), 0, 0, _mdr & 1);        \
+        _mdr >>= 1;                                         \
     })
 
-#define sla(code, reg)                                                      \
-    op_pre_simple(code, "sla " #reg, {                                      \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = 0;                                                 \
-        cpu->state.f.c = cpu->state.reg >> 7;                               \
-                                                                            \
-        cpu->state.reg <<= 1;                                               \
-        cpu->state.f.z = !cpu->state.reg;                                   \
+// Test if the bit as `pos` in a register is set or not, updating Z flag.
+#define bit(code, pos, r)                                   \
+    op_pre_simple(code, "bit " #pos ", " #r, {              \
+        __set_flags(!((_reg(r) >> pos) & 1), 0, 1, _f.c);   \
     })
 
-#define sla_hl(code)                                                        \
-    op_pre_hl(code, "sla (hl)", {                                           \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = 0;                                                 \
-        cpu->state.f.c = cpu->state.mdr >> 7;                               \
-                                                                            \
-        cpu->state.mdr <<= 1;                                               \
-        cpu->state.f.z = !cpu->state.mdr;                                   \
+// Test if the bit as `pos` of value at (hl) is set or not, updating Z flag.
+#define bit_hl(code, pos)                                   \
+    op_pre_hl(code, "bit " #pos ", (hl)", {                 \
+        __set_flags(!((_mdr >> pos) & 1), 0, 1, _f.c);      \
     })
 
-#define sra(code, reg)                                                      \
-    op_pre_simple(code, "sra " #reg, {                                      \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = 0;                                                 \
-        cpu->state.f.c = cpu->state.reg & 1;                                \
-                                                                            \
-        cpu->state.reg >>= 1;                                               \
-        cpu->state.reg |= (cpu->state.reg & 0x40) << 1;                     \
-        cpu->state.f.z = !cpu->state.reg;                                   \
-    })
+// Unset a bit at `pos` in a register
+#define res(code, pos, r) op_pre_simple(code, "res " #pos ", " #r, { _reg(r) &= ~(1 << pos); })
 
-#define sra_hl(code)                                                        \
-    op_pre_hl(code, "sra (hl)", {                                           \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = 0;                                                 \
-        cpu->state.f.c = cpu->state.mdr & 1;                                \
-                                                                            \
-        cpu->state.mdr >>= 1;                                               \
-        cpu->state.mdr |= (cpu->state.mdr & 0x40) << 1;                     \
-        cpu->state.f.z = !cpu->state.mdr;                                   \
-    })
+// Unset a bit at `pos` of value at (hl)
+#define res_hl(code, pos)   op_pre_hl(code, "res " #pos ", (hl)", { cpu->state.mdr &= ~(1 << pos); })
 
-#define swap(code, reg)                                                     \
-    op_pre_simple(code, "swap " #reg, {                                     \
-        cpu->state.reg = (cpu->state.reg >> 4) | (cpu->state.reg << 4);     \
-                                                                            \
-        cpu->state.f.z = !cpu->state.reg;                                   \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = 0;                                                 \
-        cpu->state.f.c = 0;                                                 \
-    })
+// Set a bit at `pos` in a register
+#define set(code, pos, r) op_pre_simple(code, "set " #pos ", " #r, { _reg(r) |= (1 << pos); })
 
-#define swap_hl(code)                                                       \
-    op_pre_hl(code, "swap (hl)", {                                          \
-        cpu->state.mdr = (cpu->state.mdr >> 4) | (cpu->state.mdr << 4);     \
-                                                                            \
-        cpu->state.f.z = !cpu->state.mdr;                                   \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = 0;                                                 \
-        cpu->state.f.c = 0;                                                 \
-    })
+// Set a bit at `pos` of value at (hl)
+#define set_hl(code, pos)   op_pre_hl(code, "set " #pos ", (hl)", { cpu->state.mdr |= (1 << pos); })
 
-#define srl(code, reg)                                                      \
-    op_pre_simple(code, "srl " #reg, {                                      \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = 0;                                                 \
-        cpu->state.f.c = cpu->state.reg & 1;                                \
-                                                                            \
-        cpu->state.reg >>= 1;                                               \
-        cpu->state.f.z = !cpu->state.reg;                                   \
-    })
+rlc(0x00, b); rlc(0x01, c); rlc(0x02, d); rlc(0x03, e);
+rlc(0x04, h); rlc(0x05, l); rlc_hl(0x06); rlc(0x07, a);
 
-#define srl_hl(code)                                                        \
-    op_pre_hl(code, "srl (hl)", {                                           \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = 0;                                                 \
-        cpu->state.f.c = cpu->state.mdr & 1;                                \
-                                                                            \
-        cpu->state.mdr >>= 1;                                               \
-        cpu->state.f.z = !cpu->state.mdr;                                   \
-    })
+rrc(0x08, b); rrc(0x09, c); rrc(0x0A, d); rrc(0x0B, e);
+rrc(0x0C, h); rrc(0x0D, l); rrc_hl(0x0E); rrc(0x0F, a);
 
-#define bit(code, pos, reg)                                                 \
-    op_pre_simple(code, "bit " #pos ", " #reg, {                            \
-        cpu->state.f.z = !((cpu->state.reg >> pos) & 1);                    \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = 1;                                                 \
-    })
+rl(0x10, b); rl(0x11, c); rl(0x12, d); rl(0x13, e);
+rl(0x14, h); rl(0x15, l); rl_hl(0x16); rl(0x17, a);
 
-#define bit_hl(code, pos)                                                   \
-    op_pre_hl(code, "bit " #pos ", (hl)", {                                 \
-        cpu->state.f.z = !((cpu->state.mdr >> pos) & 1);                    \
-        cpu->state.f.n = 0;                                                 \
-        cpu->state.f.h = 1;                                                 \
-    })
+rr(0x18, b); rr(0x19, c); rr(0x1A, d); rr(0x1B, e);
+rr(0x1C, h); rr(0x1D, l); rr_hl(0x1E); rr(0x1F, a);
 
-#define res(code, pos, reg)                                                 \
-    op_pre_simple(code, "res " #pos ", " #reg, {                            \
-        cpu->state.reg &= ~(1 << pos);                                      \
-    })
+sla(0x20, b); sla(0x21, c); sla(0x22, d); sla(0x23, e);
+sla(0x24, h); sla(0x25, l); sla_hl(0x26); sla(0x27, a);
 
-#define res_hl(code, pos)                                                   \
-    op_pre_hl(code, "res " #pos ", (hl)", {                                 \
-        cpu->state.mdr &= ~(1 << pos);                                      \
-    })
+sra(0x28, b); sra(0x29, c); sra(0x2A, d); sra(0x2B, e);
+sra(0x2C, h); sra(0x2D, l); sra_hl(0x2E); sra(0x2F, a);
 
-#define set(code, pos, reg)                                                 \
-    op_pre_simple(code, "set " #pos ", " #reg, {                            \
-        cpu->state.reg |= (1 << pos);                                       \
-    })
+swap(0x30, b); swap(0x31, c); swap(0x32, d); swap(0x33, e);
+swap(0x34, h); swap(0x35, l); swap_hl(0x36); swap(0x37, a);
 
-#define set_hl(code, pos)                                                   \
-    op_pre_hl(code, "set " #pos ", (hl)", {                                 \
-        cpu->state.mdr |= (1 << pos);                                       \
-    })
+srl(0x38, b); srl(0x39, c); srl(0x3A, d); srl(0x3B, e);
+srl(0x3C, h); srl(0x3D, l); srl_hl(0x3E); srl(0x3F, a);
 
-rlc(0x00, b); rlc(0x01, c);
-rlc(0x02, d); rlc(0x03, e);
-rlc(0x04, h); rlc(0x05, l);
-rlc_hl(0x06); rlc(0x07, a);
+#define _pre_bit_group(of, from, pos)                   \
+    of((from + 0), pos, b);     of((from + 1), pos, c); \
+    of((from + 2), pos, d);     of((from + 3), pos, e); \
+    of((from + 4), pos, h);     of((from + 5), pos, l); \
+    of ## _hl((from + 6), pos); of((from + 7), pos, a)
 
-rrc(0x08, b); rrc(0x09, c);
-rrc(0x0A, d); rrc(0x0B, e);
-rrc(0x0C, h); rrc(0x0D, l);
-rrc_hl(0x0E); rrc(0x0F, a);
-
-rl(0x10, b); rl(0x11, c);
-rl(0x12, d); rl(0x13, e);
-rl(0x14, h); rl(0x15, l);
-rl_hl(0x16); rl(0x17, a);
-
-rr(0x18, b); rr(0x19, c);
-rr(0x1A, d); rr(0x1B, e);
-rr(0x1C, h); rr(0x1D, l);
-rr_hl(0x1E); rr(0x1F, a);
-
-sla(0x20, b); sla(0x21, c);
-sla(0x22, d); sla(0x23, e);
-sla(0x24, h); sla(0x25, l);
-sla_hl(0x26); sla(0x27, a);
-
-sra(0x28, b); sra(0x29, c);
-sra(0x2A, d); sra(0x2B, e);
-sra(0x2C, h); sra(0x2D, l);
-sra_hl(0x2E); sra(0x2F, a);
-
-swap(0x30, b); swap(0x31, c);
-swap(0x32, d); swap(0x33, e);
-swap(0x34, h); swap(0x35, l);
-swap_hl(0x36); swap(0x37, a);
-
-srl(0x38, b); srl(0x39, c);
-srl(0x3A, d); srl(0x3B, e);
-srl(0x3C, h); srl(0x3D, l);
-srl_hl(0x3E); srl(0x3F, a);
+#define _pre_bit_byte(of, from)                                             \
+    _pre_bit_group(of, (from +  0), 0); _pre_bit_group(of, (from +  8), 1); \
+    _pre_bit_group(of, (from + 16), 2); _pre_bit_group(of, (from + 12), 3); \
+    _pre_bit_group(of, (from + 32), 4); _pre_bit_group(of, (from + 40), 5); \
+    _pre_bit_group(of, (from + 48), 6); _pre_bit_group(of, (from + 54), 7);
 
 bit(0x40, 0, b); bit(0x41, 0, c); bit(0x42, 0, d); bit(0x43, 0, e); bit(0x44, 0, h); bit(0x45, 0, l); bit_hl(0x46, 0); bit(0x47, 0, a);
 bit(0x48, 1, b); bit(0x49, 1, c); bit(0x4A, 1, d); bit(0x4B, 1, e); bit(0x4C, 1, h); bit(0x4D, 1, l); bit_hl(0x4E, 1); bit(0x4F, 1, a);

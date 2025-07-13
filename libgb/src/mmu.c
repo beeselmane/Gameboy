@@ -136,6 +136,7 @@ uint8_t __GBMemoryManagerRead(GBMemoryManager *this, uint16_t address)
 
 void GBMemoryManagerWriteRequest(GBMemoryManager *this, uint16_t *mar, uint8_t *mdr, bool *accessed)
 {
+    //printf("Request write 0x%02X to 0x%04X (%p, %p, %p)\n", *mdr, *mar, mar, mdr, accessed);
     this->accessed = accessed;
     this->mar = mar;
     this->mdr = mdr;
@@ -145,6 +146,7 @@ void GBMemoryManagerWriteRequest(GBMemoryManager *this, uint16_t *mar, uint8_t *
 
 void GBMemoryManagerReadRequest(GBMemoryManager *this, uint16_t *mar, uint8_t *mdr, bool *accessed)
 {
+    //printf("Request read from 0x%04X (%p, %p, %p)\n", *mar, mar, mdr, accessed);
     this->accessed = accessed;
     this->mar = mar;
     this->mdr = mdr;
@@ -162,9 +164,11 @@ void __GBMemoryManagerTick(GBMemoryManager *this, uint64_t tick)
     {
         if (!(*this->dma)) {
             if (this->isWrite) {
+                //printf("Write 0x%02X to 0x%04X (%p, %p, %p)\n", *this->mdr, *this->mar, this->mar, this->mdr, this->accessed);
                 __GBMemoryManagerWrite(this, *this->mar, *this->mdr);
             } else {
                 (*this->mdr) = __GBMemoryManagerRead(this, *this->mar);
+                //printf("Read 0x%02X from 0x%04X (%p, %p, %p)\n", *this->mdr, *this->mar, this->mar, this->mdr, this->accessed);
             }
         } else {
             if ((*this->mar) < kGBHighRAMStart)

@@ -210,7 +210,13 @@ int gameboy_step_once(GBGameboy *gameboy)
         __tick_once(gameboy);
     }
 
-    while (__cpu_mode(gameboy) != kGBProcessorModeFetch) {
+    while (__cpu_mode(gameboy) != kGBProcessorModeFetch)
+    {
+        // If there's a bug in the emulator, we may hit this.
+        if (__clock_ticks(gameboy) - starting_tick > 24) {
+            break;
+        }
+
         __tick_once(gameboy);
     }
 
